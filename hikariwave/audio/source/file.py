@@ -56,8 +56,6 @@ class FileAudioSource(AudioSource):
             str(constants.SAMPLE_RATE),
             "-ac",
             str(constants.CHANNELS),
-            "-blocksize",
-            str(constants.BLOCK_SIZE),
             "-loglevel",
             "error",
             "pipe:1",

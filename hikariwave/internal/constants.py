@@ -19,9 +19,6 @@ BIT_16: typing.Final[int] = 65536
 BIT_32: typing.Final[int] = 4_294_967_296
 """4,294,967,296 <=> 2^32."""
 
-BLOCK_SIZE: typing.Final[int] = 8192
-"""-blocksize argument for FFmpeg - 8,192."""
-
 CHANNELS: typing.Final[int] = 2
 """The required amount of channels that Discord requires when sending voice streams."""
 
