@@ -63,10 +63,7 @@ bot.run()
 
 - [x] Gateway Connections and Channel Join/Leave
 - [ ] Disconnect Handling via Resumed Sessions
-- [ ] Raw PCM Source Streaming (Connection-Side)
-- [ ] MP3 -> PCM Streaming (Client-Side)
-- [ ] WAV -> PCM Streaming (Client-Side)
-- [ ] Media Site (YouTube, etc.) -> PCM Streaming (Client-Side)
+- [ ] Audio Streaming from Sources
 - [x] Audio Encryption Algorithms
 - [ ] Discord Audio/Video End-2-End Encryption (DAVE) Support (Required in the future)
 
