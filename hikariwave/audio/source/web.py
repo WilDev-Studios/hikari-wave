@@ -41,22 +41,20 @@ class WebAudioSource(AudioSource):
                     error: str = f"Failed to fetch audio: HTTP {response.status}"
                     raise RuntimeError(error)
 
-                ffmpeg: asyncio.subprocess.Process = (
-                    await asyncio.create_subprocess_exec(
-                        "ffmpeg",
-                        "-i",
-                        "pipe:0",
-                        "-f",
-                        str(constants.PCM_FORMAT),
-                        "-ar",
-                        str(constants.SAMPLE_RATE),
-                        "-ac",
-                        str(constants.CHANNELS),
-                        "pipe:1",
-                        stdin=asyncio.subprocess.PIPE,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.DEVNULL,
-                    )
+                ffmpeg: asyncio.subprocess.Process = await asyncio.create_subprocess_exec(
+                    "ffmpeg",
+                    "-i",
+                    "pipe:0",
+                    "-f",
+                    str(constants.PCM_FORMAT),
+                    "-ar",
+                    str(constants.SAMPLE_RATE),
+                    "-ac",
+                    str(constants.CHANNELS),
+                    "pipe:1",
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
                 )
 
                 async def feed_ffmpeg() -> None:
