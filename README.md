@@ -2,20 +2,21 @@
 
 Voice module for `hikari`-based Discord bots
 
-- Latest Version `UNRELEASED`
+- Latest Version `0.0.1a1`
 - Supports Python `3.10+`
 
 [![Documentation Status](https://readthedocs.org/projects/hikari-wave/badge/?version=latest&style=for-the-badge)](https://hikari-wave.readthedocs.io/en/latest/?badge=latest)
 
 ## What is hikari-wave?
 
-`hikari-wave` is a standalone module for `hikari` (an asynchronous Discord API for building bots) that allows developers to easily manipulate voice-related systems and logic. Much like `discord.py`, `hikari-wave` uses `aiohttp` to communicate with Discord on the backend, while most other `hikari`-based bots use `Lavalink` as a backend, which requires a separate install.
+`hikari-wave` is a standalone module for `hikari` (an asynchronous Discord API for building bots) that allows developers to easily manipulate voice-related systems and logic. Much like `discord.py`, `hikari-wave` implements a custom communication layer to communicate with Discord on the backend, while most other `hikari`-based bots use `Lavalink` as a backend, which requires a separate install.
 
 ## What are hikari-wave's features?
 
 - Doesn't require third-party installs besides `ffmpeg`
 - Easy to use, asynchronous API
 - Heavily type-hinted and type-safe
+- Supplemental events for further development ease and QoL
 
 ## How do I use hikari-wave?
 
@@ -40,75 +41,58 @@ bot.run()
 This won't do anything besides sit and look pretty. The following will make the bot connect/disconnect if a user joins/leaves a voice channel:
 
 ```python
-import hikari
-import hikariwave
+# imports and bot/client definition
 
-bot: hikari.GatewayBot = hikari.GatewayBot(TOKEN_HERE)
-voice: hikariwave.VoiceClient = hikariwave.VoiceClient(bot)
+@bot.listen(hikariwave.MemberJoinVoiceEvent)
+async def member_joined_voice(event: hikariwave.MemberJoinVoiceEvent) -> None:
+    await voice.connect(event.guild_id, event.channel_id)
 
-@bot.listen(hikari.VoiceStateUpdateEvent)
-async def voice_state_update(event: hikari.VoiceStateUpdateEvent) -> None:
-    if event.state.user_id == bot.get_me().id: # Don't update if it's the bot, only others
-        return
-    
-    if event.state.channel_id:
-        await voice.connect(event.guild_id, event.state.channel_id)
-    else:
-        await voice.disconnect(event.guild_id)
+@bot.listen(hikariwave.MemberLeaveVoiceEvent)
+async def member_left_voice(event: hikariwave.MemberLeaveVoiceEvent) -> None:
+    await voice.disconnect(guild_id=event.guild_id)
+    # OR - can work for either guild or channel, for convenience
+    await voice.disconnect(channel_id=event.channel_id)
 
 bot.run()
 ```
 
-## Feature Checklist
+To make this play audio, get the connection and then play:
 
-- [x] Gateway Connections and Channel Join/Leave
-- [ ] Disconnect Handling via Resumed Sessions
-- [ ] Audio Streaming from Sources
-- [x] Audio Encryption Algorithms
-- [ ] Discord Audio/Video End-2-End Encryption (DAVE) Support (Required in the future)
+```python
+@bot.listen(hikariwave.MemberJoinVoiceEvent)
+async def member_joined_voice(event: hikariwave.MemberJoinVoiceEvent) -> None:
+    connection: hikariwave.VoiceConnection = await voice.connect(event.guild_id, event.channel_id)
+    await connection.play_file("test.mp3")
+```
 
-## Contributing
+Super easy and convenient!
 
-Thanks for your interest in contributing to this project! Contributions are always welcome!
-Whether you want to submit a bug report, fix a bug, add a new feature, or remove parts of the program, we welcome your contributions.
+## Implemented Steps
 
-### How to Contribute
+1. [x] Connect/Disconnect logic
+2. [X] Playing audio
+3. [X] Move/Reconnect/Resume logic
+4. [X] Supplemental events
+5. Audio types: files, URLs, etc.
+    - [X] Files
+    - [ ] Web (URLs)
+    - [ ] YouTube
+    - [ ] Others (SoundCloud, buffers, etc.)
+6. [ ] Player QoL (queue, shuffle, prev/next, etc.)
+7. [ ] DAVE (Discord Audio/Video End-to-End Encryption)
 
-1. Fork this repository
-    - Fork this repository to your own GitHub account by clicking the "Fork" button at the top-right of this page.
-2. Clone your fork
-    - Clone the forked repository to your local machine using the following command:
-    - `git clone https://github.com/your-username/your-fork.git`
-3. Create a new branch
-    - Before making any changes, create a new branch with a descriptive name for your work/changes. For example:
-    - `git checkout -b feature-name`
-4. Make your changes
-    - Implement your changes, whether it's fixing bugs, improving documentation, or adding new features.
-    - Be sure to write clear, concise commit messages explaining the changes you've made.
-5. Commit your changes
-    - Once your changes are ready, commit them to your local branch:
-    - `git add .`
-    - `git commit -m "Add feature-name"`
-6. Push your changes
-    - Push your changes to your forked repository:
-    - `git push origin feature-name`
-7. Create a pull request
-    - Open a pull request on the original repository from your fork.
-    - Ensure that your pull request explains the purpose of the changes and any relevant context.
-    - If applicable, include links to relevant issues.
-
-### Reporting Bugs
+## Reporting Bugs
 
 - If you find a bug or issue, please open an issue on the `Issues` page above.
 - Be sure to provide detailed information to help us understand and reproduce the problem.
 
-### Feature Requests
+## Feature Requests
 
 - We welcome suggestions for new features.
 - If you have an idea, please open an issue on the `Issues` page above to discuss it first.
 - This ensures that we're all on the same page and helps us prioritize improvements.
 
-### Thanks for Contributing
+## Thanks for Contributing
 
 Your contributions make this project better and more useful for everyone! Thank you for taking the time to improve this project!
 

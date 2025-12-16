@@ -1,118 +1,172 @@
 from __future__ import annotations
 
-from hikariwave.audio.opus import OpusEncoder
-from hikariwave.header import Header
-from hikariwave.internal import constants
+from hikariwave.constants import Audio
+from hikariwave.audio.source import AudioSource, FileAudioSource
+from typing import TYPE_CHECKING
 
 import asyncio
-import typing
+import logging
+import nacl.secret as secret
+import struct
+import time
 
-if typing.TYPE_CHECKING:
-    from hikariwave.audio.source.base import AudioSource
+if TYPE_CHECKING:
     from hikariwave.connection import VoiceConnection
-    
-    from typing import Callable
 
-__all__: typing.Sequence[str] = ("AudioPlayer",)
-
+logger: logging.Logger = logging.getLogger("hikariwave.player")
 
 class AudioPlayer:
-    """
-    Handler class meant to control and handle the playing of audio for each connection.
-
-    Warning
-    -------
-    This is an internal object and should not be instantiated.
-    """
+    """Responsible for all audio."""
 
     def __init__(self, connection: VoiceConnection) -> None:
         """
-        Instantiate a new audio player.
-
-        Warning
-        -------
-        This is an internal method and should not be called.
-
+        Create a new audio player.
+        
         Parameters
         ----------
         connection : VoiceConnection
-            The connection that this player will interface with.
+            The active voice connection.
         """
-        self._connection: VoiceConnection = connection
+        
+        self.connection: VoiceConnection = connection
 
-        self._sequence: int = 0
-        self._timestamp: int = 0
+        self.ended: asyncio.Event = asyncio.Event()
+        self.resumed: asyncio.Event = asyncio.Event()
+        self.resumed.set()
 
-        self._encoder: OpusEncoder = OpusEncoder()
-        self._playing: bool = False
+        self.sequence: int = 0
+        self.timestamp: int = 0
+        self.nonce: int = 0
 
-        self._encryption_mode: Callable[[bytes, bytes], bytes] = getattr(
-            self._connection._encryption,
-            self._connection._mode if self._connection._mode else '',
-        )
-
-    async def _send_packet(self, frame: bytes, encode_to_opus: bool) -> None:
-        if not frame or not self._connection._transport:
-            return
-
-        if encode_to_opus:
-            if (frame_length := len(frame)) < (frame_total := constants.FRAME_SIZE * 4):
-                frame += b"\x00" * (frame_total - frame_length)
-
-            frame = self._encoder.encode(frame)
+        self.play_task: asyncio.Task = None
     
-        rtp_header: bytes = Header.create_rtp(
-            self._sequence,
-            self._timestamp,
-            self._connection._ssrc if self._connection._ssrc else 0,
-        )
+    def _encrypt_aead_xchacha20_poly1305_rtpsize(self, header: bytes, audio: bytes) -> bytes:
+        box: secret.Aead = secret.Aead(self.connection.secret)
 
-        encrypted_packet: bytes = self._encryption_mode(rtp_header, frame)
-        self._connection._transport.sendto(encrypted_packet)
+        nonce: bytearray = bytearray(24)
+        nonce[:4] = struct.pack(">I", self.nonce)
 
-        self._sequence = (self._sequence + 1) % constants.BIT_16
-        self._timestamp = (self._timestamp + constants.FRAME_SIZE) % (constants.BIT_32)
+        self.nonce = (self.nonce + 1) % Audio.BIT_32U
 
-        await asyncio.sleep(constants.FRAME_LENGTH / 1000)
+        return header + box.encrypt(audio, header, bytes(nonce)).ciphertext + nonce[:4]
 
-    async def _playback(self, source: AudioSource, encode_to_opus: bool) -> None:
+    def _generate_rtp(self) -> bytes:
+        header: bytearray = bytearray(12)
+        header[0] = 0x80
+        header[1] = 0x78
+        struct.pack_into(">H", header, 2, self.sequence)
+        struct.pack_into(">I", header, 4, self.timestamp)
+        struct.pack_into(">I", header, 8, self.connection.ssrc)
+
+        return bytes(header)
+
+    async def _play_internal(self, source: AudioSource) -> None:
+        self.ended.clear()
+
         try:
-            async for pcm_frame in source.decode(): # type: ignore
-                if not self._playing or not self._connection._transport:
+            await self.connection.gateway.set_speaking(True)
+    
+            if isinstance(source, FileAudioSource):
+                await self.connection.client.ffmpeg.start(source.filepath)
+            else:
+                await self.connection.client.ffmpeg.start(await source.read())
+            
+            frame_duration: float = Audio.FRAME_LENGTH / 1000
+            frame_count: int = 0
+            start_time: float = time.perf_counter()
+
+            while not self.ended.is_set():
+                if not self.resumed.is_set():
+                    await self._send_silence()
+                    await self.resumed.wait()
+
+                    frame_count = 0
+                    start_time = time.perf_counter()
+                    continue
+
+                pcm: bytes = await self.connection.client.ffmpeg.decode(Audio.FRAME_SIZE)
+
+                if not pcm or len(pcm) < Audio.FRAME_SIZE:
                     break
 
-                await self._send_packet(pcm_frame, encode_to_opus) # type: ignore
-        except (StopIteration, StopAsyncIteration):
-            return
+                opus: bytes = await self.connection.client.opus.encode(pcm)
 
-    async def play(self, source: AudioSource, encode_to_opus: bool = True) -> None:
+                if not opus:
+                    break
+
+                header: bytes = self._generate_rtp()
+                encrypted: bytes = getattr(self, f"_encrypt_{self.connection.mode}")(header, opus)
+
+                await self.connection.server.send(encrypted)
+
+                self.sequence = (self.sequence + 1) % Audio.BIT_16U
+                self.timestamp = (self.timestamp + Audio.SAMPLES_PER_FRAME) % Audio.BIT_32U
+                frame_count += 1
+
+                next_frame_time: float = start_time + (frame_count * frame_duration)
+                current_time: float = time.perf_counter()
+                sleep_time: float = next_frame_time - current_time
+
+                if sleep_time > 0:
+                    await asyncio.sleep(sleep_time)
+                elif sleep_time < -0.020:
+                    logger.debug(f"Frame {frame_count} is {-sleep_time:.3f}s behind schedule")
+        finally:
+            try:
+                await self._send_silence()
+            except:...
+
+            try:
+                await self.connection.gateway.set_speaking(False)
+            except:...
+
+    async def _send_silence(self) -> None:
+        for _ in range(5): await self.connection.server.send(b"\xF8\xFF\xFE")
+
+    async def pause(self) -> None:
         """
-        Play the selected audio source and stream it to the connection.
+        Pause the current audio.
+        """
 
-        Warning
-        -------
-        This is an internal method and should not be called.
+        self.resumed.clear()
+        await self.connection.gateway.set_speaking(False)
 
+    async def play(self, source: AudioSource) -> None:
+        """
+        Play audio from a source.
+        
         Parameters
         ----------
         source : AudioSource
-            The audio source to stream from.
-        encode_to_opus : bool
-            If this source should encode into Opus before encryption.
+            The source of the audio to play.
         """
-        if self._playing:
+        
+        if self.play_task and not self.play_task.done():
             await self.stop()
 
-        self._playing = True
+            try:
+                await asyncio.wait_for(self.play_task, 1)
+            except:...
 
-        await self._playback(source, encode_to_opus)
+            await asyncio.sleep(0.05)
+        
+        self.play_task = asyncio.create_task(self._play_internal(source))
+        await self.play_task
+    
+    async def resume(self) -> None:
+        """
+        Resume the current audio.
+        """
+        
+        await self.connection.gateway.set_speaking(True)
+        self.resumed.set()
 
     async def stop(self) -> None:
         """
-        Stop the player from streaming audio to the connection.
-
-        Warning
-        -------
-        This is an internal method and should not be called.
+        Stop the current audio.
         """
-        self._playing = False
+        
+        self.ended.set()
+        self.resumed.set()
+
+        await self.connection.gateway.set_speaking(False)

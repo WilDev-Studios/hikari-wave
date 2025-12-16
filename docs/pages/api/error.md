@@ -1,6 +1,6 @@
 ---
 title: Error
-description: Error
+description: Errors
 ---
 
 ## Error

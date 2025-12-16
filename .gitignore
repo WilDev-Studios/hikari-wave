@@ -1,7 +1,5 @@
-# Wame specific
-_build
-_status
-_templates
+# HikariWave-related
+test/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

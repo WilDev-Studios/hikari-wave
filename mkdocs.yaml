@@ -70,26 +70,22 @@ extra:
 
 nav:
   - Home: index.md
-  - Tutorials:
-    - Tutorials: pages/tutorials/index.md
   - API Reference:
     - Audio:
-      - Encryption: pages/api/audio/encryption.md
+      - FFmpeg: pages/api/audio/ffmpeg.md
       - Opus: pages/api/audio/opus.md
       - Player: pages/api/audio/player.md
-      - Source:
-        - Base: pages/api/audio/source/base.md
-        - File: pages/api/audio/source/file.md
-        - Silent: pages/api/audio/source/silent.md
-        - Web: pages/api/audio/source/web.md
-    - Internal:
-      - Constants: pages/api/internal/constants.md
+      - Source: pages/api/audio/source.md
+    - Event:
+      - Events: pages/api/event/events.md
+      - Factory: pages/api/event/factory.md
+      - Types: pages/api/event/types.md
     - Client: pages/api/client.md
     - Connection: pages/api/connection.md
+    - Constants: pages/api/constants.md
     - Error: pages/api/error.md
-    - Header: pages/api/header.md
-    - Protocol: pages/api/protocol.md
-    - Voice: pages/api/voice.md
+    - Gateway: pages/api/gateway.md
+    - Server: pages/api/server.md
   - Changelog:
     - Index: pages/changelog/index.md
-    - 0.0.1a1 (UNRELEASED): pages/changelog/0.0.1a1.md
+    - 0.0.1a1 (12-16-2025): pages/changelog/0.0.1a1.md

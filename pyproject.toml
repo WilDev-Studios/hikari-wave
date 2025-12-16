@@ -1,8 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "hikari-wave"
+version = "0.0.1a1"
 description = "Voice module for `hikari`-based Discord bots"
 readme = "README.md"
-requires-python = ">= 3.9"
+requires-python = ">= 3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
@@ -10,69 +15,25 @@ authors = [
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
-    "Programming Language :: Implementation :: CPython"
+    "Programming Language :: Python :: Implementation :: CPython",
 ]
-keywords = ["asynchronous", "voice", "discord", "hikari", "bot"]
+keywords = ["async", "bot", "voice", "discord", "hikari"]
 dependencies = [
-    "aiohttp",
+    "aiofiles",
     "hikari",
-    "msgspec",
-    "cryptography",
+    "PyNaCl",
     "opuslib",
-    "pynacl"
+    "websockets",
 ]
-dynamic = ["version"]
 
 [project.urls]
 "Homepage" = "https://github.com/WilDev-Studios/hikari-wave"
-
-[tool.uv]
-required-version = "~=0.6"
-
-[tool.pyright]
-pythonVersion = "3.9"
-typeCheckingMode = "strict"
-reportPrivateUsage = false
-reportMissingTypeStubs = true
-reportUnnecessaryTypeIgnoreComment = "warning"
-reportUninitializedInstanceVariable = "error"
-reportShadowedImports = "warning"
-
-[tool.ruff]
-extend-exclude = ["examples/*", ".venv/*"]
-
-[tool.ruff.format]
-docstring-code-format = true
-
-[tool.ruff.lint.isort]
-force-single-line = true
-
-[tool.ruff.lint]
-select = ["ALL"]
-ignore = []
-fixable = ["ALL"]
-
-[tool.ruff.lint.pydocstyle]
-convention = "numpy"
-
-[build-system]
-requires = ["hatchling>=1.27.0"]
-build-backend = "hatchling.build"
-
-[tool.hatch.version]
-path = "hikariwave/internal/about.py"
-pattern = "^__version__: typing\\.Final\\[str\\] = \"(?P<version>[0-9]+(\\.[0-9]+)?(\\.[0-9]+)?(dev|post|a[0-9]+)?)\"$"
-
-[tool.hatch.build.targets.wheel]
-packages = ["hikariwave"]
-artifacts = ["pyproject.toml", "README.md", "LICENSE"]

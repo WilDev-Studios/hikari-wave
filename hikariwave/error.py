@@ -1,21 +1,14 @@
 from __future__ import annotations
 
-import typing
+from typing import Final, Sequence
 
-__all__: typing.Sequence[str] = (
-    "ConnectionAlreadyEstablishedError",
-    "ConnectionNotEstablishedError",
-    "EncryptionModeNotSupportedError",
+__all__: Final[Sequence[str]] = (
+    "GatewayError",
+    "ServerError",
 )
 
+class GatewayError(Exception):
+    """Raised when an error occurs with a voice system gateway."""
 
-class ConnectionAlreadyEstablishedError(RuntimeError):
-    """Thrown when an attempt to create a new connection occurs when a connection already exists."""
-
-
-class ConnectionNotEstablishedError(RuntimeError):
-    """Thrown when an attempt to manipulate a connection occurs when the connection doesn't exist."""
-
-
-class EncryptionModeNotSupportedError(RuntimeError):
-    """Thrown when an attempt to use an unsupported encryption mode occurs."""
+class ServerError(Exception):
+    """Raised when an error occurs with a voice system server."""

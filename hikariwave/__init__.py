@@ -1,13 +1,12 @@
-"""hikari-wave.
+"""
+### hikari-wave: `0.0.1a1`\n
+An asynchronous, type-safe, easy-to-use voice system implementation for `hikari`-based Discord bots.
 
-Voice module for `hikari`-based Discord bots.
-
-#### Documentation: https://hikari-wave.wildevstudios.net/en/0.0.1a1
-#### GitHub: https://github.com/WilDev-Studios/hikari-wave
+**Documentation:** https://hikari-wave.wildevstudios.net/en/0.0.1a1\n
+**GitHub:** https://github.com/WilDev-Studios/hikari-wave
 """
 
-import typing
-
-from hikariwave.client import VoiceClient
-
-__all__: typing.Sequence[str] = ("VoiceClient",)
+from .client import VoiceClient
+from .connection import VoiceConnection
+from .error import *
+from .event.events import *

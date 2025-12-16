@@ -1,6 +1,6 @@
 ---
 title: Opus
-description: Opus
+description: Opus Encoder
 ---
 
 ## Opus
