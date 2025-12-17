@@ -20,10 +20,6 @@ __all__ = (
     "MemberMuteEvent",
     "MemberStartSpeakingEvent",
     "MemberStopSpeakingEvent",
-    "VoiceActiveEvent",
-    "VoiceEmptyEvent",
-    "VoiceInactiveEvent",
-    "VoicePopulatedEvent",
     "VoiceReconnectEvent",
     "VoiceWarningEvent",
 )
@@ -327,86 +323,6 @@ class MemberStopSpeakingEvent(WaveEvent):
         return self
 
 @dataclass(frozen=True, slots=True)
-class VoiceActiveEvent(WaveEvent):
-    """Dispatched when a voice channel becomes active (members speaking), excluding the current bot."""
-
-    channel_id: hikari.Snowflake
-    """The ID of the channel that is active."""
-    guild_id: hikari.Snowflake
-    """The ID of the guild the channel is in."""
-
-    @classmethod
-    def _create(
-        cls,
-        channel_id: hikari.Snowflake,
-        guild_id: hikari.Snowflake,
-    ) -> VoiceInactiveEvent:
-        self = object.__new__(cls)
-        object.__setattr__(self, "channel_id", channel_id)
-        object.__setattr__(self, "guild_id", guild_id)
-        return self
-
-@dataclass(frozen=True, slots=True)
-class VoiceEmptyEvent(WaveEvent):
-    """Dispatched when there are no other users in a voice channel, excluding the current bot."""
-
-    channel_id: hikari.Snowflake
-    """The ID of the channel."""
-    guild_id: hikari.Snowflake
-    """The ID of the guild the channel is in."""
-
-    @classmethod
-    def _create(
-        cls,
-        channel_id: hikari.Snowflake,
-        guild_id: hikari.Snowflake,
-    ) -> VoiceEmptyEvent:
-        self = object.__new__(cls)
-        object.__setattr__(self, "channel_id", channel_id)
-        object.__setattr__(self, "guild_id", guild_id)
-        return self
-
-@dataclass(frozen=True, slots=True)
-class VoiceInactiveEvent(WaveEvent):
-    """Dispatched when a voice channel becomes inactive (no members speaking), excluding the current bot."""
-
-    channel_id: hikari.Snowflake
-    """The ID of the channel that is inactive."""
-    guild_id: hikari.Snowflake
-    """The ID of the guild the channel is in."""
-
-    @classmethod
-    def _create(
-        cls,
-        channel_id: hikari.Snowflake,
-        guild_id: hikari.Snowflake,
-    ) -> VoiceInactiveEvent:
-        self = object.__new__(cls)
-        object.__setattr__(self, "channel_id", channel_id)
-        object.__setattr__(self, "guild_id", guild_id)
-        return self
-
-@dataclass(frozen=True, slots=True)
-class VoicePopulatedEvent(WaveEvent):
-    """Dispatched when a voice channel gains its first member, excluding the current bot."""
-
-    channel_id: hikari.Snowflake
-    """The ID of the channel."""
-    guild_id: hikari.Snowflake
-    """The ID of the guild the channel is in."""
-
-    @classmethod
-    def _create(
-        cls,
-        channel_id: hikari.Snowflake,
-        guild_id: hikari.Snowflake,
-    ) -> VoicePopulatedEvent:
-        self = object.__new__(cls)
-        object.__setattr__(self, "channel_id", channel_id)
-        object.__setattr__(self, "guild_id", guild_id)
-        return self
-
-@dataclass(frozen=True, slots=True)
 class VoiceReconnectEvent(WaveEvent):
     """Dispatched when a voice connection reconnects or resumes."""
 
@@ -420,7 +336,7 @@ class VoiceReconnectEvent(WaveEvent):
         cls,
         channel_id: hikari.Snowflake,
         guild_id: hikari.Snowflake,
-    ) -> VoicePopulatedEvent:
+    ) -> VoiceReconnectEvent:
         self = object.__new__(cls)
         object.__setattr__(self, "channel_id", channel_id)
         object.__setattr__(self, "guild_id", guild_id)

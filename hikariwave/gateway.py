@@ -145,7 +145,7 @@ class VoiceGateway:
                     ssrc: int = data["ssrc"]
 
                     self._connection._client._ssrcs[user_id] = ssrc
-                    self._connection._client._ssrcs_reference[ssrc] = user_id
+                    self._connection._client._ssrcsr[ssrc] = user_id
                 case Opcode.HEARTBEAT_ACK:
                     self.last_heartbeat_ack = time.time()
                 case Opcode.RESUMED:

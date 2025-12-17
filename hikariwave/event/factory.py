@@ -43,10 +43,6 @@ class EventFactory:
             WaveEventType.MEMBER_MUTE: events.MemberMuteEvent,
             WaveEventType.MEMBER_START_SPEAKING: events.MemberStartSpeakingEvent,
             WaveEventType.MEMBER_STOP_SPEAKING: events.MemberStopSpeakingEvent,
-            WaveEventType.VOICE_ACTIVE: events.VoiceActiveEvent,
-            WaveEventType.VOICE_EMPTY: events.VoiceEmptyEvent,
-            WaveEventType.VOICE_INACTIVE: events.VoiceInactiveEvent,
-            WaveEventType.VOICE_POPULATED: events.VoicePopulatedEvent,
             WaveEventType.VOICE_RECONNECT: events.VoiceReconnectEvent,
             WaveEventType.VOICE_WARNING: events.VoiceWarningEvent,
         }.items():

@@ -43,14 +43,6 @@ class WaveEventType(IntEnum):
     """When a member starts speaking."""
     MEMBER_STOP_SPEAKING  = auto()
     """When a member stops speaking."""
-    VOICE_ACTIVE          = auto()
-    """When a channel has member(s) speaking."""
-    VOICE_EMPTY           = auto()
-    """When a channel becomes empty."""
-    VOICE_INACTIVE        = auto()
-    """When a channel no longer has member(s) speaking."""
-    VOICE_POPULATED       = auto()
-    """When a channel becomes populated."""
     VOICE_RECONNECT       = auto()
     """When a voice connection has to reconnect."""
     VOICE_WARNING         = auto()

@@ -5,7 +5,7 @@ from hikariwave.event.types import WaveEventType
 from typing import Callable, Final, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .client import VoiceClient
+    from hikariwave.client import VoiceClient, VoiceChannelMeta
 
 import asyncio
 import hikari
@@ -139,7 +139,7 @@ class VoiceServer:
 
         ssrc: int = struct.unpack_from(">I", data, 8)[0]
 
-        if ssrc not in self._client._ssrcs_reference:
+        if ssrc not in self._client._ssrcsr:
             return
 
         now: float = asyncio.get_running_loop().time()
@@ -149,24 +149,18 @@ class VoiceServer:
         if not is_new:
             return
         
-        user_id: hikari.Snowflake = self._client._ssrcs_reference[ssrc]
-        member: hikari.Member = self._client._views[user_id]
-        channel_id: hikari.Snowflake = self._client._members[member.id].channel_id
-        channel = self._client._channels[channel_id]
+        user_id: hikari.Snowflake = self._client._ssrcsr[ssrc]
+        channel_id: hikari.Snowflake = self._client._members[user_id]
+
+        channel: VoiceChannelMeta = self._client._channels[channel_id]
         guild: hikari.Snowflake = channel.guild_id
+
         self._client._event_factory.emit(
             WaveEventType.MEMBER_START_SPEAKING,
             channel_id,
             guild,
-            member,
+            channel.members[user_id],
         )
-
-        if len(channel.active) == 0:
-            self._client._event_factory.emit(
-                WaveEventType.VOICE_ACTIVE,
-                channel_id,
-                guild,
-            )
         
         channel.active.add(user_id)
 
@@ -183,27 +177,20 @@ class VoiceServer:
 
                     del self._last_audio[ssrc]
 
-                    user: hikari.Snowflake = self._client._ssrcs_reference[ssrc]
-                    member: hikari.Member = self._client._views[user]
-                    channel_id: hikari.Snowflake = self._client._members[member.id].channel_id
-                    channel = self._client._channels[channel_id]
+                    user_id: hikari.Snowflake = self._client._ssrcsr[ssrc]
+                    channel_id: hikari.Snowflake = self._client._members[user_id]
+
+                    channel: VoiceChannelMeta = self._client._channels[channel_id]
                     guild: hikari.Snowflake = channel.guild_id
 
-                    channel.active.remove(user)
+                    channel.active.remove(user_id)
 
                     self._client._event_factory.emit(
                         WaveEventType.MEMBER_STOP_SPEAKING,
                         channel,
                         guild,
-                        member,
+                        channel.members[user_id],
                     )
-                
-                    if len(channel.active) == 0:
-                        self._client._event_factory.emit(
-                            WaveEventType.VOICE_INACTIVE,
-                            channel_id,
-                            guild,
-                        )
 
                 await asyncio.sleep(0.05)
         except asyncio.CancelledError:

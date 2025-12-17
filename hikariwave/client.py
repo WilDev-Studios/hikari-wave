@@ -30,19 +30,8 @@ class VoiceChannelMeta:
     """The ID of the guild this channel is in."""
     id: hikari.Snowflake
     """The ID of this channel."""
-    population: int
-    """How many users are in this channel."""
-
-@dataclass(slots=True)
-class VoiceMemberMeta:
-    """Metadata container for a member."""
-
-    channel_id: hikari.Snowflake
-    """The ID of the channel this member is in."""
-    is_mute: bool
-    """If the member is muted."""
-    is_deaf: bool
-    """If the member is deafened."""
+    members: dict[hikari.Snowflake, hikari.Member]
+    """All members inside of this channel."""
 
 class VoiceClient:
     """Voice system implementation for `hikari`-based Discord bots."""
@@ -65,25 +54,35 @@ class VoiceClient:
         self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
 
         self._connections: dict[GuildID, VoiceConnection] = {}
-        self._connections_reference: dict[ChannelID, GuildID] = {}
+        self._connectionsr: dict[ChannelID, GuildID] = {}
 
-        self._members: dict[MemberID, VoiceMemberMeta] = {}
         self._channels: dict[ChannelID, VoiceChannelMeta] = {}
-        self._views: dict[MemberID, hikari.Member] = {}
+        self._members: dict[MemberID, ChannelID] = {}
         self._ssrcs: dict[MemberID, int] = {}
-        self._ssrcs_reference: dict[int, MemberID] = {}
+        self._ssrcsr: dict[int, MemberID] = {}
+
+        self._states: dict[MemberID, tuple[bool, bool]] = {}
 
         self._event_factory: EventFactory = EventFactory(self._bot)
-
         self._ffmpeg: FFmpeg = FFmpeg()
     
     async def _disconnect(self, guild_id: hikari.Snowflakeish) -> None:
-        connection: VoiceConnection = self._connections.pop(guild_id)
+        try:
+            connection: VoiceConnection = self._connections.pop(guild_id)
+        except KeyError:
+            return
 
         logger.info(f"Disconnecting from voice: Guild={guild_id}, Channel={connection._channel_id}")
 
-        del self._connections_reference[connection._channel_id]
+        del self._connectionsr[connection._channel_id]
         await connection._disconnect()
+
+        cmeta: VoiceChannelMeta = self._channels.pop(connection._channel_id)
+        for member_id in cmeta.members.keys():
+            del self._members[member_id]
+            ssrc: int | None = self._ssrcs.pop(member_id, None)
+            if ssrc:
+                self._ssrcsr.pop(ssrc, None)
 
         self._event_factory.emit(
             WaveEventType.BOT_LEAVE_VOICE,
@@ -106,104 +105,107 @@ class VoiceClient:
 
     async def _voice_state_update(self, event: hikari.VoiceStateUpdateEvent) -> None:
         state: hikari.VoiceState = event.state
-
-        if state.user_id == self._bot.get_me().id: return
-        if not state.member: return
-
-        channel: hikari.Snowflake = state.channel_id
-        guild: hikari.Snowflake = state.guild_id
         member: hikari.Member = state.member
+        if state.user_id == self._bot.get_me().id or not member:
+            return
+        
+        guild_id: hikari.Snowflake = state.guild_id
+        old_channel_id: hikari.Snowflake | None = self._members.get(member.id)
+        new_channel_id: hikari.Snowflake | None = state.channel_id
 
-        in_voice: bool = member.id in self._members
+        # Member Joined Channel
+        if new_channel_id and not old_channel_id:
+            member.is_deaf = state.is_guild_deafened or state.is_self_deafened
+            member.is_mute = state.is_guild_muted or state.is_self_muted
+            self._states[member.id] = (member.is_deaf, member.is_mute)
 
-        if channel and not in_voice:
-            self._members[member.id] = VoiceMemberMeta(channel, state.is_guild_muted or state.is_self_muted, state.is_guild_deafened or state.is_self_deafened)
-            self._views[member.id] = member
+            if new_channel_id in self._channels:
+                cmeta: VoiceChannelMeta = self._channels[new_channel_id]
+                cmeta.members[member.id] = member
+                self._members[member.id] = new_channel_id
 
-            if channel not in self._channels:
-                self._channels[channel] = VoiceChannelMeta(set(), guild, channel, 0)
-                self._event_factory.emit(
-                    WaveEventType.VOICE_POPULATED,
-                    channel,
-                    guild,
-                )
-            
-            self._channels[channel].population += 1
             self._event_factory.emit(
                 WaveEventType.MEMBER_JOIN_VOICE,
-                channel,
-                guild,
+                new_channel_id,
+                guild_id,
                 member,
             )
-            return
-        
-        if not channel and in_voice:
-            channel = self._members[member.id].channel_id
-            cmeta: VoiceChannelMeta = self._channels[channel]
-            cmeta.population -= 1
+        # Member Moved Channels
+        elif new_channel_id and old_channel_id and old_channel_id != new_channel_id:
+            if old_channel_id in self._channels:
+                cmeta: VoiceChannelMeta = self._channels[old_channel_id]
+                del cmeta.members[member.id]
+                del self._members[member.id]
 
-            if cmeta.population < 1:
-                del self._channels[channel]
-                self._event_factory.emit(
-                    WaveEventType.VOICE_EMPTY,
-                    channel,
-                    guild,
-                )
+                ssrc: int | None = self._ssrcs.pop(member.id, None)
+                if ssrc:
+                    del self._ssrcsr[ssrc]
 
-            del self._members[member.id]
-            del self._views[member.id]
+            if new_channel_id in self._channels:
+                cmeta: VoiceChannelMeta = self._channels[new_channel_id]
+                cmeta.members[member.id] = member
+                self._members[member.id] = new_channel_id
 
-            if member.id in self._ssrcs:
-                ssrc: int = self._ssrcs.pop(member.id)
-                del self._ssrcs_reference[ssrc]
-            
-            return self._event_factory.emit(
-                WaveEventType.MEMBER_LEAVE_VOICE,
-                channel,
-                guild,
-                member,
-            )
-        
-        if channel and in_voice and self._members[member.id].channel_id != channel:
-            meta: VoiceMemberMeta = self._members[member.id]
+                ssrc: int | None = self._ssrcs.pop(member.id, None)
+                if ssrc:
+                    del self._ssrcsr[ssrc]
+
             self._event_factory.emit(
                 WaveEventType.MEMBER_MOVE_VOICE,
-                guild,
+                guild_id,
                 member,
-                channel,
-                meta.channel_id,
+                new_channel_id,
+                old_channel_id,
             )
-            meta.channel_id = channel
+        # Member Left Channel
+        elif not new_channel_id and old_channel_id:
+            del self._states[member.id]
 
-            self._views[member.id] = member
-            return
+            if old_channel_id in self._channels:
+                cmeta: VoiceChannelMeta = self._channels[old_channel_id]
+                del cmeta.members[member.id]
+                del self._members[member.id]
 
-        if channel:
-            meta: VoiceMemberMeta = self._members[member.id]
-            deaf: bool = event.state.is_self_deafened or event.state.is_guild_deafened
-            mute: bool = event.state.is_self_muted or event.state.is_guild_muted
+                ssrc: int | None = self._ssrcs.pop(member.id, None)
+                if ssrc:
+                    del self._ssrcsr[ssrc]
 
-            if deaf != meta.is_deaf:
-                meta.is_deaf = deaf
+            self._event_factory.emit(
+                WaveEventType.MEMBER_LEAVE_VOICE,
+                old_channel_id,
+                guild_id,
+                member,
+            )
+        # Member Update
+        elif new_channel_id and old_channel_id and new_channel_id == old_channel_id:
+            member.is_deaf = state.is_guild_deafened or state.is_self_deafened
+            member.is_mute = state.is_guild_muted or state.is_self_muted
+
+            old_deaf, old_mute = self._states[member.id]
+
+            if new_channel_id in self._channels:
+                cmeta: VoiceChannelMeta = self._channels[new_channel_id]
+                cmeta.members[member.id] = member
+
+            if old_deaf != member.is_deaf:
                 self._event_factory.emit(
                     WaveEventType.MEMBER_DEAF,
-                    channel,
-                    guild,
+                    new_channel_id,
+                    guild_id,
                     member,
-                    deaf,
+                    member.is_deaf,
                 )
             
-            if mute != meta.is_mute:
-                meta.is_mute = mute
+            if old_mute != member.is_mute:
                 self._event_factory.emit(
                     WaveEventType.MEMBER_MUTE,
-                    channel,
-                    guild,
+                    new_channel_id,
+                    guild_id,
                     member,
-                    mute,
+                    member.is_mute,
                 )
             
-            self._views[member.id] = member
+            self._states[member.id] = (member.is_deaf, member.is_mute)
 
     @property
     def bot(self) -> hikari.GatewayBot:
@@ -263,13 +265,21 @@ class VoiceClient:
             raise GatewayError(error)
 
         guild: hikari.Guild = await self._bot.rest.fetch_guild(guild_id)
-        population: int = 0
+        members: dict[hikari.Snowflake, hikari.Member] = {}
+
         for state in guild.get_voice_states().values():
-            self._members[state.member.id] = VoiceMemberMeta(channel_id, state.is_guild_muted or state.is_self_muted, state.is_guild_deafened or state.is_self_deafened)
-            self._views[state.member.id] = state.member
-            
-            population += 1
-        self._channels[channel_id] = VoiceChannelMeta(set(), guild_id, channel_id, population)
+            if state.user_id == self._bot.get_me().id or state.channel_id != channel_id:
+                continue
+
+            self._states[state.member.id] = (
+                state.is_guild_deafened or state.is_self_deafened,
+                state.is_guild_muted or state.is_self_muted,
+            )
+
+            members[state.member.id] = state.member
+            self._members[state.member.id] = channel_id
+        
+        self._channels[channel_id] = VoiceChannelMeta(set(), guild_id, channel_id, members)
 
         connection: VoiceConnection = VoiceConnection(
             self,
@@ -281,7 +291,7 @@ class VoiceClient:
         )
         await connection._connect()
         self._connections[guild_id] = connection
-        self._connections_reference[channel_id] = guild_id
+        self._connectionsr[channel_id] = guild_id
 
         self._event_factory.emit(
             WaveEventType.BOT_JOIN_VOICE,
@@ -330,7 +340,7 @@ class VoiceClient:
             raise ValueError(error)
         
         if channel_id:
-            guild_id = self._connections_reference[channel_id]
+            guild_id = self._connectionsr[channel_id]
 
         await self._bot.update_voice_state(guild_id, None)
         await self._disconnect(guild_id)
@@ -371,7 +381,7 @@ class VoiceClient:
             raise ValueError(error)
         
         if channel_id:
-            guild_id = self._connections_reference[channel_id]
+            guild_id = self._connectionsr[channel_id]
         
         try:
             return self._connections[guild_id]
