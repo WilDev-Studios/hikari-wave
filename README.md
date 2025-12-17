@@ -13,7 +13,7 @@ Voice module for `hikari`-based Discord bots
 
 ## What are hikari-wave's features?
 
-- Doesn't require third-party installs besides `ffmpeg`
+- Doesn't require third-party installs besides [FFmpeg](https://ffmpeg.org/download.html).
 - Easy to use, asynchronous API
 - Heavily type-hinted and type-safe
 - Supplemental events for further development ease and QoL
@@ -22,6 +22,7 @@ Voice module for `hikari`-based Discord bots
 
 - Install `hikari-wave` via `PyPI`: `pip install hikari-wave`
 - Import it into your program using `import hikariwave`
+- Verify [FFmpeg](https://ffmpeg.org/download.html) is installed and discoverable in your system's `PATH`.
 
 ## Documentation
 
