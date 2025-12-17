@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from hikariwave.audio.source import AudioSource
 from hikariwave.event.types import VoiceWarningType
 
 import hikari
 
 __all__ = (
     "WaveEvent",
+    "AudioBeginEvent",
+    "AudioEndEvent",
     "BotJoinVoiceEvent",
     "BotLeaveVoiceEvent",
     "MemberDeafEvent",
@@ -38,6 +41,54 @@ class WaveEvent(hikari.Event, ABC):
     @classmethod
     @abstractmethod
     def _create(cls) -> WaveEvent:...
+
+@dataclass(frozen=True, slots=True)
+class AudioBeginEvent(WaveEvent):
+    """Dispatched when audio begins playing in a voice channel."""
+
+    channel_id: hikari.Snowflake
+    """The ID of the channel."""
+    guild_id: hikari.Snowflake
+    """The ID of the guild the channel is in."""
+    audio: AudioSource
+    """The audio that is playing."""
+
+    @classmethod
+    def _create(
+        cls,
+        channel_id: hikari.Snowflake,
+        guild_id: hikari.Snowflake,
+        audio: AudioSource,
+    ) -> AudioBeginEvent:
+        self = object.__new__(cls)
+        object.__setattr__(self, "channel_id", channel_id)
+        object.__setattr__(self, "guild_id", guild_id)
+        object.__setattr__(self, "audio", audio)
+        return self
+
+@dataclass(frozen=True, slots=True)
+class AudioEndEvent(WaveEvent):
+    """Dispatched when audio stops playing in a voice channel."""
+
+    channel_id: hikari.Snowflake
+    """The ID of the channel."""
+    guild_id: hikari.Snowflake
+    """The ID of the guild the channel is in."""
+    audio: AudioSource
+    """The audio that is no longer playing."""
+
+    @classmethod
+    def _create(
+        cls,
+        channel_id: hikari.Snowflake,
+        guild_id: hikari.Snowflake,
+        audio: AudioSource,
+    ) -> AudioBeginEvent:
+        self = object.__new__(cls)
+        object.__setattr__(self, "channel_id", channel_id)
+        object.__setattr__(self, "guild_id", guild_id)
+        object.__setattr__(self, "audio", audio)
+        return self
 
 @dataclass(frozen=True, slots=True)
 class BotJoinVoiceEvent(WaveEvent):

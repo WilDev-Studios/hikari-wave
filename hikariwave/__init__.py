@@ -6,6 +6,8 @@ An asynchronous, type-safe, easy-to-use voice system implementation for `hikari`
 **GitHub:** https://github.com/WilDev-Studios/hikari-wave
 """
 
+from .audio.player import AudioPlayer
+from .audio.source import *
 from .client import VoiceClient
 from .connection import VoiceConnection
 from .error import *

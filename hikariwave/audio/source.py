@@ -5,8 +5,35 @@ from typing import Any, AsyncGenerator
 
 import aiofiles
 
+__all__ = (
+    "AudioSource",
+    "FileAudioSource",
+)
+
 class AudioSource(ABC):
     """Base audio source implementation."""
+
+    @abstractmethod
+    def __init__(self) -> None:
+        error: str = "AudioSource should only be subclassed"
+        raise NotImplementedError(error)
+
+    @abstractmethod
+    def __eq__(self, other: object) -> bool:
+        error: str = "AudioSource eq cannot be resolved as it should be subclassed"
+        raise NotImplementedError(error)
+    
+    @abstractmethod
+    def __hash__(self) -> int:
+        error: str = "AudioSource hash cannot be resolved as it should be subclassed"
+        raise NotImplementedError(error)
+
+    def __repr__(self) -> str:
+        args: list[str] = []
+        for key, value in self.__dict__.items():
+            args.append(f"{key}={value}")
+
+        return f"{self.__class__.__name__}({', '.join(args)})"
 
     @abstractmethod
     async def read(self) -> bytes:
@@ -18,6 +45,9 @@ class AudioSource(ABC):
         bytes
             The contents of this source.
         """
+
+        error: str = "AudioSource.read should only be called in a subclass"
+        raise NotImplementedError(error)
 
     @abstractmethod
     async def stream(self, size: int) -> AsyncGenerator[bytes, Any]:
@@ -35,6 +65,9 @@ class AudioSource(ABC):
             Each chunk of audio from this source.
         """
 
+        error: str = "AudioSource.stream should only be called in a subclass"
+        raise NotImplementedError(error)
+
 class FileAudioSource(AudioSource):
     """File audio source implementation."""
 
@@ -49,6 +82,13 @@ class FileAudioSource(AudioSource):
         """
         
         self.filepath: str = filepath
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, FileAudioSource): return False
+        return self.filepath == other.filepath
+
+    def __hash__(self) -> int:
+        return hash(self.filepath)
 
     async def read(self) -> bytes:
         async with aiofiles.open(self.filepath, "rb") as file:

@@ -21,6 +21,10 @@ class WaveEventType(IntEnum):
 
     ALL                   = auto()
     """Base event listener - Receives all events."""
+    AUDIO_BEGIN           = auto()
+    """When audio begins playing."""
+    AUDIO_END             = auto()
+    """When audio stops playing."""
     BOT_JOIN_VOICE        = auto()
     """When the bot joins a channel."""
     BOT_LEAVE_VOICE       = auto()

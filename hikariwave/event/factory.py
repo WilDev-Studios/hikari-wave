@@ -32,6 +32,8 @@ class EventFactory:
         self._builders: dict[WaveEventType, EventBuilder] = {}
 
         for type_, event in {
+            WaveEventType.AUDIO_BEGIN: events.AudioBeginEvent,
+            WaveEventType.AUDIO_END: events.AudioEndEvent,
             WaveEventType.BOT_JOIN_VOICE: events.BotJoinVoiceEvent,
             WaveEventType.BOT_LEAVE_VOICE: events.BotLeaveVoiceEvent,
             WaveEventType.MEMBER_DEAF: events.MemberDeafEvent,

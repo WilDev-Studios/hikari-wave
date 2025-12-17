@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from hikariwave.audio.player import AudioPlayer
-from hikariwave.audio.source import FileAudioSource
+from hikariwave.audio.source import AudioSource, FileAudioSource
 from hikariwave.event.types import WaveEventType
 from hikariwave.gateway import Opcode, ReadyPayload, SessionDescriptionPayload, VoiceGateway
 from hikariwave.server import VoiceServer
@@ -109,6 +109,38 @@ class VoiceConnection:
         self.secret = payload.secret
         self.ready.set()
     
+    async def add_queue(self, source: AudioSource) -> None:
+        """
+        Add an audio source to the player's queue.
+        
+        Parameters
+        ----------
+        source : AudioSource
+            The source to add to the queue.
+        """
+
+        await self.player.add_queue(source)
+    
+    async def add_queue_file(self, filepath: str) -> None:
+        """
+        Add audio to the player's queue from an audio file.
+        
+        Parameters
+        ----------
+        filepath : str
+            The path, absolute or relative, to the audio file.
+        """
+
+        source: FileAudioSource = FileAudioSource(filepath)
+        await self.add_queue(source)
+
+    async def clear_queue(self) -> None:
+        """
+        Clear audio from the player's queue.
+        """
+
+        await self.player.clear_queue()
+
     async def disconnect(self) -> None:
         """
         Disconnect from the current channel.
@@ -122,12 +154,31 @@ class VoiceConnection:
         
         return self.gateway.last_heartbeat_ack - self.gateway.last_heartbeat_sent
     
+    async def next(self) -> None:
+        """
+        Play the next audio in queue.
+        """
+
+        await self.player.next()
+
     async def pause(self) -> None:
         """
         Pause playback of the current audio.
         """
         
         await self.player.pause()
+
+    async def play(self, source: AudioSource) -> None:
+        """
+        Play audio from a source.
+        
+        Parameters
+        ----------
+        source : AudioSource
+            The source that contains the audio.
+        """
+
+        await self.player.play(source)
 
     async def play_file(self, filepath: str) -> None:
         """
@@ -140,8 +191,40 @@ class VoiceConnection:
         """
         
         source: FileAudioSource = FileAudioSource(filepath)
-        await self.player.play(source)
+        await self.play(source)
     
+    async def previous(self) -> None:
+        """
+        Play the latest previously played audio.
+        """
+
+        await self.player.previous()
+
+    async def remove_queue(self, source: AudioSource) -> None:
+        """
+        Remove an audio source from the player's queue.
+        
+        Parameters
+        ----------
+        source : AudioSource
+            The source to remove from the queue.
+        """
+
+        await self.player.remove_queue(source)
+    
+    async def remove_queue_file(self, filepath: str) -> None:
+        """
+        Remove a file audio source from the player's queue.
+        
+        Parameters
+        ----------
+        filepath : str
+            The path, absolute or relative, to the audio file.
+        """
+
+        source: FileAudioSource = FileAudioSource(filepath)
+        await self.remove_queue(source)
+
     async def resume(self) -> None:
         """
         Resume playback of the current audio.
