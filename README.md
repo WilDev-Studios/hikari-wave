@@ -69,17 +69,17 @@ Super easy and convenient!
 
 ## Implemented Steps
 
-1. [x] Connect/Disconnect logic
-2. [X] Playing audio
-3. [X] Move/Reconnect/Resume logic
-4. [X] Supplemental events
-5. Audio types: files, URLs, etc.
-    - [X] Files
-    - [ ] Web (URLs)
-    - [ ] YouTube
-    - [ ] Others (SoundCloud, buffers, etc.)
-6. [ ] Player QoL (queue, shuffle, prev/next, etc.)
-7. [ ] DAVE (Discord Audio/Video End-to-End Encryption)
+- [x] Connect/Disconnect logic
+- [X] Playing audio
+- [X] Move/Reconnect/Resume logic
+- [X] Supplemental events
+- Audio types: files, URLs, etc.
+    1. [X] Files
+    2. [ ] Web (URLs)
+    3. [ ] YouTube
+    4. [ ] Others (SoundCloud, buffers, etc.)
+- [ ] Player QoL (queue, shuffle, prev/next, etc.)
+- [ ] DAVE (Discord Audio/Video End-to-End Encryption)
 
 ## Reporting Bugs
 

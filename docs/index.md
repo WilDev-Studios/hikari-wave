@@ -67,35 +67,6 @@ async def member_joined_voice(event: hikariwave.MemberJoinVoiceEvent) -> None:
 
 Super easy and convenient!
 
-## Implemented Steps
-
-1. [x] Connect/Disconnect logic
-2. [X] Playing audio
-3. [X] Move/Reconnect/Resume logic
-4. [X] Supplemental events
-5. Audio types: files, URLs, etc.
-    - [X] Files
-    - [ ] Web (URLs)
-    - [ ] YouTube
-    - [ ] Others (SoundCloud, buffers, etc.)
-6. [ ] Player QoL (queue, shuffle, prev/next, etc.)
-7. [ ] DAVE (Discord Audio/Video End-to-End Encryption)
-
-## Reporting Bugs
-
-- If you find a bug or issue, please open an issue on the `Issues` page above.
-- Be sure to provide detailed information to help us understand and reproduce the problem.
-
-## Feature Requests
-
-- We welcome suggestions for new features.
-- If you have an idea, please open an issue on the `Issues` page above to discuss it first.
-- This ensures that we're all on the same page and helps us prioritize improvements.
-
-## Thanks for Contributing
-
-Your contributions make this project better and more useful for everyone! Thank you for taking the time to improve this project!
-
 ## License
 
 This project is licensed under the [MIT License](https://github.com/WilDev-Studios/hikari-wave/blob/main/LICENSE). Copyright &copy; 2025 WilDev Studios. All rights reserved.
