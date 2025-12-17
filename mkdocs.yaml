@@ -73,7 +73,6 @@ nav:
   - API Reference:
     - Audio:
       - FFmpeg: pages/api/audio/ffmpeg.md
-      - Opus: pages/api/audio/opus.md
       - Player: pages/api/audio/player.md
       - Source: pages/api/audio/source.md
     - Event:
@@ -88,5 +87,6 @@ nav:
     - Server: pages/api/server.md
   - Changelog:
     - Index: pages/changelog/index.md
+    - 0.0.1a3 (12-17-2025): pages/changelog/0.0.1a3.md
     - 0.0.1a2 (12-17-2025): pages/changelog/0.0.1a2.md
     - 0.0.1a1 (12-16-2025): pages/changelog/0.0.1a1.md

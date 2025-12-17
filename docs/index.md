@@ -2,11 +2,6 @@
 
 Voice module for `hikari`-based Discord bots
 
-- Latest Version `0.0.1a2`
-- Supports Python `3.10+`
-
-[![Documentation Status](https://readthedocs.org/projects/hikari-wave/badge/?version=latest&style=for-the-badge)](https://hikari-wave.readthedocs.io/en/latest/?badge=latest)
-
 ## What is hikari-wave?
 
 `hikari-wave` is a standalone module for `hikari` (an asynchronous Discord API for building bots) that allows developers to easily manipulate voice-related systems and logic. Much like `discord.py`, `hikari-wave` implements a custom communication layer to communicate with Discord on the backend, while most other `hikari`-based bots use `Lavalink` as a backend, which requires a separate install.

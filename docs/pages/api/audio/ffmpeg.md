@@ -1,6 +1,6 @@
 ---
 title: FFmpeg
-description: FFmpeg Decoder
+description: FFmpeg Audio Encoder and Decoder
 ---
 
 ## FFmpeg
