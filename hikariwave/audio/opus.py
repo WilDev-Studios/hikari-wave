@@ -22,7 +22,7 @@ class OpusEncoder:
         Create an Opus encoder.
         """
         
-        self.encoder: opuslib.Encoder = None
+        self._encoder: opuslib.Encoder = None
     
     async def encode(self, pcm: bytes) -> bytes:
         """
@@ -39,27 +39,27 @@ class OpusEncoder:
             The Opus-encoded audio, if any.
         """
         
-        if not self.encoder:
+        if not self._encoder:
             return
         
         pcm = pcm[:Audio.FRAME_SIZE].ljust(
             Audio.FRAME_SIZE, b"\0",
         )
-        return self.encoder.encode(pcm, Audio.SAMPLES_PER_FRAME)
+        return self._encoder.encode(pcm, Audio.SAMPLES_PER_FRAME)
 
     async def start(self) -> None:
         """
         Start the internal encoder to encode PCM.
         """
         
-        if self.encoder: return
+        if self._encoder: return
 
         self.frame_samples = (
             Audio.FRAME_SIZE //
             (Audio.CHANNELS * 2)
         )
 
-        self.encoder = opuslib.Encoder(
+        self._encoder = opuslib.Encoder(
             Audio.SAMPLING_RATE,
             Audio.CHANNELS,
             opuslib.APPLICATION_AUDIO,
@@ -70,4 +70,4 @@ class OpusEncoder:
         Stop the internal encoder.
         """
         
-        self.encoder = None
+        self._encoder = None

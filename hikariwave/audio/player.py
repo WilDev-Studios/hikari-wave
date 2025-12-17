@@ -32,21 +32,21 @@ class AudioPlayer:
             Maximum number of tracks to keep in history - Default `20`.
         """
         
-        self.connection: VoiceConnection = connection
+        self._connection: VoiceConnection = connection
 
         self._ended: asyncio.Event = asyncio.Event()
         self._skip: asyncio.Event = asyncio.Event()
         self._resumed: asyncio.Event = asyncio.Event()
         self._resumed.set()
 
-        self.sequence: int = 0
-        self.timestamp: int = 0
-        self.nonce: int = 0
+        self._sequence: int = 0
+        self._timestamp: int = 0
+        self._nonce: int = 0
 
         self._queue: deque[AudioSource] = deque()
         self._history: deque[AudioSource] = deque(maxlen=max_history)
         self._direct_source: AudioSource = None
-        self.current: AudioSource = None
+        self._current: AudioSource = None
 
         self._player_task: asyncio.Task = None
         self._lock: asyncio.Lock = asyncio.Lock()
@@ -54,12 +54,12 @@ class AudioPlayer:
         self._track_completed: bool = False
 
     def _encrypt_aead_xchacha20_poly1305_rtpsize(self, header: bytes, audio: bytes) -> bytes:
-        box: secret.Aead = secret.Aead(self.connection.secret)
+        box: secret.Aead = secret.Aead(self._connection._secret)
 
         nonce: bytearray = bytearray(24)
-        nonce[:4] = struct.pack(">I", self.nonce)
+        nonce[:4] = struct.pack(">I", self._nonce)
 
-        self.nonce = (self.nonce + 1) % Audio.BIT_32U
+        self._nonce = (self._nonce + 1) % Audio.BIT_32U
 
         return header + box.encrypt(audio, header, bytes(nonce)).ciphertext + nonce[:4]
 
@@ -67,9 +67,9 @@ class AudioPlayer:
         header: bytearray = bytearray(12)
         header[0] = 0x80
         header[1] = 0x78
-        struct.pack_into(">H", header, 2, self.sequence)
-        struct.pack_into(">I", header, 4, self.timestamp)
-        struct.pack_into(">I", header, 8, self.connection.ssrc)
+        struct.pack_into(">H", header, 2, self._sequence)
+        struct.pack_into(">I", header, 4, self._timestamp)
+        struct.pack_into(">I", header, 8, self._connection._ssrc)
 
         return bytes(header)
 
@@ -79,17 +79,17 @@ class AudioPlayer:
         self._track_completed = False
 
         try:
-            await self.connection.gateway.set_speaking(True)
+            await self._connection._gateway.set_speaking(True)
     
             if isinstance(source, FileAudioSource):
-                await self.connection.client.ffmpeg.start(source.filepath)
+                await self._connection._client._ffmpeg.start(source._filepath)
             else:
-                await self.connection.client.ffmpeg.start(await source.read())
+                await self._connection._client._ffmpeg.start(await source.read())
             
-            self.connection.client.event_factory.emit(
+            self._connection._client._event_factory.emit(
                 WaveEventType.AUDIO_BEGIN,
-                self.connection.channel_id,
-                self.connection.guild_id,
+                self._connection._channel_id,
+                self._connection._guild_id,
                 source,
             )
             
@@ -106,23 +106,23 @@ class AudioPlayer:
                     start_time = time.perf_counter()
                     continue
 
-                pcm: bytes = await self.connection.client.ffmpeg.decode(Audio.FRAME_SIZE)
+                pcm: bytes = await self._connection._client._ffmpeg.decode(Audio.FRAME_SIZE)
 
                 if not pcm or len(pcm) < Audio.FRAME_SIZE:
                     self._track_completed = True
                     break
 
-                opus: bytes = await self.connection.client.opus.encode(pcm)
+                opus: bytes = await self._connection._client._opus.encode(pcm)
 
                 if not opus:
                     break
 
                 header: bytes = self._generate_rtp()
-                encrypted: bytes = getattr(self, f"_encrypt_{self.connection.mode}")(header, opus)
-                await self.connection.server.send(encrypted)
+                encrypted: bytes = getattr(self, f"_encrypt_{self._connection._mode}")(header, opus)
+                await self._connection._server.send(encrypted)
 
-                self.sequence = (self.sequence + 1) % Audio.BIT_16U
-                self.timestamp = (self.timestamp + Audio.SAMPLES_PER_FRAME) % Audio.BIT_32U
+                self._sequence = (self._sequence + 1) % Audio.BIT_16U
+                self._timestamp = (self._timestamp + Audio.SAMPLES_PER_FRAME) % Audio.BIT_32U
                 frame_count += 1
 
                 target: float = start_time + (frame_count * frame_duration)
@@ -141,7 +141,7 @@ class AudioPlayer:
         finally:
             try:
                 await self._send_silence()
-                await self.connection.gateway.set_speaking(False)
+                await self._connection._gateway.set_speaking(False)
             except Exception as e:
                 logger.error(f"Error in playback cleanup: {e}")
 
@@ -156,27 +156,27 @@ class AudioPlayer:
                 elif self._queue:
                     source = self._queue.popleft()
                 else:
-                    self.current = None
+                    self._current = None
                     self._player_task = None
                     return
             
-                self.current = source
+                self._current = source
             
             completed: bool = await self._play_internal(source)
 
             async with self._lock:
-                self.connection.client.event_factory.emit(
+                self._connection._client._event_factory.emit(
                     WaveEventType.AUDIO_END,
-                    self.connection.channel_id,
-                    self.connection.guild_id,
-                    self.current,
+                    self._connection._channel_id,
+                    self._connection._guild_id,
+                    self._current,
                 )
 
                 if completed or (self._skip.is_set() and not self._ended.is_set()):
                     self._history.append(source)
 
     async def _send_silence(self) -> None:
-        for _ in range(5): await self.connection.server.send(b"\xF8\xFF\xFE")
+        for _ in range(5): await self._connection._server.send(b"\xF8\xFF\xFE")
 
     async def add_queue(self, source: AudioSource) -> None:
         """
@@ -203,6 +203,16 @@ class AudioPlayer:
             self._queue.clear()
 
     @property
+    def connection(self) -> VoiceConnection:
+        """The active connection that is responsible for this player."""
+        return self._connection
+
+    @property
+    def current(self) -> AudioSource | None:
+        """The currently playing audio, if present."""
+        return self._current
+
+    @property
     def history(self) -> list[AudioSource]:
         """Get all audio previously played."""
 
@@ -214,7 +224,7 @@ class AudioPlayer:
         """
 
         async with self._lock:
-            if self.current is None:
+            if self._current is None:
                 return
     
             self._skip.set()
@@ -227,7 +237,7 @@ class AudioPlayer:
         self._resumed.clear()
 
         try:
-            await self.connection.gateway.set_speaking(False)
+            await self._connection._gateway.set_speaking(False)
         except Exception as e:
             logger.error(f"Error setting speaking state in pause: {e}")
 
@@ -244,7 +254,7 @@ class AudioPlayer:
         async with self._lock:
             self._direct_source = source
 
-            if self.current is not None:
+            if self._current is not None:
                 self._skip.set()
 
             if not self._player_task or self._player_task.done():
@@ -263,7 +273,7 @@ class AudioPlayer:
 
             self._queue.appendleft(previous)
 
-            if self.current is not None:
+            if self._current is not None:
                 self._skip.set()
 
     @property
@@ -294,7 +304,7 @@ class AudioPlayer:
         """
         
         try:
-            await self.connection.gateway.set_speaking(True)
+            await self._connection._gateway.set_speaking(True)
         except Exception as e:
             logger.error(f"Error setting speaking state in resume: {e}")
         
@@ -308,13 +318,13 @@ class AudioPlayer:
         async with self._lock:
             self._queue.clear()
             self._direct_source = None
-            self.current = None
+            self._current = None
         
         self._ended.set()
         self._skip.set()
         self._resumed.set()
 
         try:
-            await self.connection.gateway.set_speaking(False)
+            await self._connection._gateway.set_speaking(False)
         except Exception as e:
             logger.error(f"Error setting speaking state in stop: {e}")

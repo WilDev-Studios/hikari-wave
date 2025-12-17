@@ -61,48 +61,48 @@ class VoiceClient:
             The `hikari`-based Discord bot to link this voice system with.
         """
         
-        self.bot: hikari.GatewayBot = bot
-        self.bot.subscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
-        self.bot.subscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
+        self._bot: hikari.GatewayBot = bot
+        self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
+        self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
 
-        self.connections: dict[GuildID, VoiceConnection] = {}
-        self.connections_reference: dict[ChannelID, GuildID] = {}
+        self._connections: dict[GuildID, VoiceConnection] = {}
+        self._connections_reference: dict[ChannelID, GuildID] = {}
 
-        self.members: dict[MemberID, VoiceMemberMeta] = {}
-        self.channels: dict[ChannelID, VoiceChannelMeta] = {}
-        self.views: dict[MemberID, hikari.Member] = {}
-        self.ssrcs: dict[MemberID, int] = {}
-        self.ssrcs_reference: dict[int, MemberID] = {}
+        self._members: dict[MemberID, VoiceMemberMeta] = {}
+        self._channels: dict[ChannelID, VoiceChannelMeta] = {}
+        self._views: dict[MemberID, hikari.Member] = {}
+        self._ssrcs: dict[MemberID, int] = {}
+        self._ssrcs_reference: dict[int, MemberID] = {}
 
-        self.event_factory: EventFactory = EventFactory(self.bot)
+        self._event_factory: EventFactory = EventFactory(self._bot)
 
-        self.ffmpeg: FFmpegDecoder = FFmpegDecoder()
-        self.opus: OpusEncoder = OpusEncoder()
+        self._ffmpeg: FFmpegDecoder = FFmpegDecoder()
+        self._opus: OpusEncoder = OpusEncoder()
     
     async def _disconnect(self, guild_id: hikari.Snowflakeish) -> None:
-        connection: VoiceConnection = self.connections.pop(guild_id)
+        connection: VoiceConnection = self._connections.pop(guild_id)
 
-        logger.info(f"Disconnecting from voice: Guild={guild_id}, Channel={connection.channel_id}")
+        logger.info(f"Disconnecting from voice: Guild={guild_id}, Channel={connection._channel_id}")
 
-        del self.connections_reference[connection.channel_id]
+        del self._connections_reference[connection._channel_id]
         await connection._disconnect()
 
-        self.event_factory.emit(
+        self._event_factory.emit(
             WaveEventType.BOT_LEAVE_VOICE,
-            self.bot,
-            connection.channel_id,
+            self._bot,
+            connection._channel_id,
             guild_id,
         )
 
-        if len(self.connections) == 0:
-            await self.opus.stop()
-            await self.ffmpeg.stop()
+        if len(self._connections) == 0:
+            await self._opus.stop()
+            await self._ffmpeg.stop()
 
     async def _disconnected(self, event: hikari.VoiceStateUpdateEvent) -> None:
-        if event.state.user_id != self.bot.get_me().id:
+        if event.state.user_id != self._bot.get_me().id:
             return
         
-        if event.guild_id not in self.connections:
+        if event.guild_id not in self._connections:
             return
         
         await self._disconnect(event.guild_id)
@@ -110,29 +110,29 @@ class VoiceClient:
     async def _voice_state_update(self, event: hikari.VoiceStateUpdateEvent) -> None:
         state: hikari.VoiceState = event.state
 
-        if state.user_id == self.bot.get_me().id: return
+        if state.user_id == self._bot.get_me().id: return
         if not state.member: return
 
         channel: hikari.Snowflake = state.channel_id
         guild: hikari.Snowflake = state.guild_id
         member: hikari.Member = state.member
 
-        in_voice: bool = member.id in self.members
+        in_voice: bool = member.id in self._members
 
         if channel and not in_voice:
-            self.members[member.id] = VoiceMemberMeta(channel, state.is_guild_muted or state.is_self_muted, state.is_guild_deafened or state.is_self_deafened)
-            self.views[member.id] = member
+            self._members[member.id] = VoiceMemberMeta(channel, state.is_guild_muted or state.is_self_muted, state.is_guild_deafened or state.is_self_deafened)
+            self._views[member.id] = member
 
-            if channel not in self.channels:
-                self.channels[channel] = VoiceChannelMeta(set(), guild, channel, 0)
-                self.event_factory.emit(
+            if channel not in self._channels:
+                self._channels[channel] = VoiceChannelMeta(set(), guild, channel, 0)
+                self._event_factory.emit(
                     WaveEventType.VOICE_POPULATED,
                     channel,
                     guild,
                 )
             
-            self.channels[channel].population += 1
-            self.event_factory.emit(
+            self._channels[channel].population += 1
+            self._event_factory.emit(
                 WaveEventType.MEMBER_JOIN_VOICE,
                 channel,
                 guild,
@@ -141,35 +141,35 @@ class VoiceClient:
             return
         
         if not channel and in_voice:
-            channel = self.members[member.id].channel_id
-            cmeta: VoiceChannelMeta = self.channels[channel]
+            channel = self._members[member.id].channel_id
+            cmeta: VoiceChannelMeta = self._channels[channel]
             cmeta.population -= 1
 
             if cmeta.population < 1:
-                del self.channels[channel]
-                self.event_factory.emit(
+                del self._channels[channel]
+                self._event_factory.emit(
                     WaveEventType.VOICE_EMPTY,
                     channel,
                     guild,
                 )
 
-            del self.members[member.id]
-            del self.views[member.id]
+            del self._members[member.id]
+            del self._views[member.id]
 
-            if member.id in self.ssrcs:
-                ssrc: int = self.ssrcs.pop(member.id)
-                del self.ssrcs_reference[ssrc]
+            if member.id in self._ssrcs:
+                ssrc: int = self._ssrcs.pop(member.id)
+                del self._ssrcs_reference[ssrc]
             
-            return self.event_factory.emit(
+            return self._event_factory.emit(
                 WaveEventType.MEMBER_LEAVE_VOICE,
                 channel,
                 guild,
                 member,
             )
         
-        if channel and in_voice and self.members[member.id].channel_id != channel:
-            meta: VoiceMemberMeta = self.members[member.id]
-            self.event_factory.emit(
+        if channel and in_voice and self._members[member.id].channel_id != channel:
+            meta: VoiceMemberMeta = self._members[member.id]
+            self._event_factory.emit(
                 WaveEventType.MEMBER_MOVE_VOICE,
                 guild,
                 member,
@@ -178,17 +178,17 @@ class VoiceClient:
             )
             meta.channel_id = channel
 
-            self.views[member.id] = member
+            self._views[member.id] = member
             return
 
         if channel:
-            meta: VoiceMemberMeta = self.members[member.id]
+            meta: VoiceMemberMeta = self._members[member.id]
             deaf: bool = event.state.is_self_deafened or event.state.is_guild_deafened
             mute: bool = event.state.is_self_muted or event.state.is_guild_muted
 
             if deaf != meta.is_deaf:
                 meta.is_deaf = deaf
-                self.event_factory.emit(
+                self._event_factory.emit(
                     WaveEventType.MEMBER_DEAF,
                     channel,
                     guild,
@@ -198,7 +198,7 @@ class VoiceClient:
             
             if mute != meta.is_mute:
                 meta.is_mute = mute
-                self.event_factory.emit(
+                self._event_factory.emit(
                     WaveEventType.MEMBER_MUTE,
                     channel,
                     guild,
@@ -206,7 +206,12 @@ class VoiceClient:
                     mute,
                 )
             
-            self.views[member.id] = member
+            self._views[member.id] = member
+
+    @property
+    def bot(self) -> hikari.GatewayBot:
+        """The controlling OAuth2 bot."""
+        return self._bot
 
     async def connect(
         self,
@@ -243,31 +248,31 @@ class VoiceClient:
 
         logger.info(f"Connecting to voice: Guild={guild_id}, Channel={channel_id}, Mute={mute}, Deaf={deaf}")
 
-        await self.bot.update_voice_state(guild_id, channel_id, self_mute=mute, self_deaf=deaf)
+        await self._bot.update_voice_state(guild_id, channel_id, self_mute=mute, self_deaf=deaf)
 
         try:
             server_update, state_update = await asyncio.gather(
-                self.bot.wait_for(
+                self._bot.wait_for(
                     hikari.VoiceServerUpdateEvent, 3.0,
                     lambda e: e.guild_id == guild_id
                 ),
-                self.bot.wait_for(
+                self._bot.wait_for(
                     hikari.VoiceStateUpdateEvent, 3.0,
-                    lambda e: e.guild_id == guild_id and e.state.channel_id == channel_id and e.state.user_id == self.bot.get_me().id
+                    lambda e: e.guild_id == guild_id and e.state.channel_id == channel_id and e.state.user_id == self._bot.get_me().id
                 )
             )
         except asyncio.TimeoutError:
             error: str = "Voice server/state update timed out"
             raise GatewayError(error)
 
-        guild: hikari.Guild = await self.bot.rest.fetch_guild(guild_id)
+        guild: hikari.Guild = await self._bot.rest.fetch_guild(guild_id)
         population: int = 0
         for state in guild.get_voice_states().values():
-            self.members[state.member.id] = VoiceMemberMeta(channel_id, state.is_guild_muted or state.is_self_muted, state.is_guild_deafened or state.is_self_deafened)
-            self.views[state.member.id] = state.member
+            self._members[state.member.id] = VoiceMemberMeta(channel_id, state.is_guild_muted or state.is_self_muted, state.is_guild_deafened or state.is_self_deafened)
+            self._views[state.member.id] = state.member
             
             population += 1
-        self.channels[channel_id] = VoiceChannelMeta(set(), guild_id, channel_id, population)
+        self._channels[channel_id] = VoiceChannelMeta(set(), guild_id, channel_id, population)
 
         connection: VoiceConnection = VoiceConnection(
             self,
@@ -278,23 +283,28 @@ class VoiceClient:
             server_update.token,
         )
         await connection._connect()
-        self.connections[guild_id] = connection
-        self.connections_reference[channel_id] = guild_id
+        self._connections[guild_id] = connection
+        self._connections_reference[channel_id] = guild_id
 
-        self.event_factory.emit(
+        self._event_factory.emit(
             WaveEventType.BOT_JOIN_VOICE,
-            self.bot,
+            self._bot,
             channel_id,
             guild_id,
             deaf,
             mute,
         )
 
-        if len(self.connections) == 1:
-            await self.opus.start()
+        if len(self._connections) == 1:
+            await self._opus.start()
 
         return connection
     
+    @property
+    def connections(self) -> dict[hikari.Snowflake, VoiceConnection]:
+        """A mapping of all voice connections."""
+        return dict(self._connections)
+
     async def disconnect(
         self,
         *,
@@ -326,9 +336,9 @@ class VoiceClient:
             raise ValueError(error)
         
         if channel_id:
-            guild_id = self.connections_reference[channel_id]
+            guild_id = self._connections_reference[channel_id]
 
-        await self.bot.update_voice_state(guild_id, None)
+        await self._bot.update_voice_state(guild_id, None)
         await self._disconnect(guild_id)
     
     def get_connection(
@@ -367,9 +377,9 @@ class VoiceClient:
             raise ValueError(error)
         
         if channel_id:
-            guild_id = self.connections_reference[channel_id]
+            guild_id = self._connections_reference[channel_id]
         
         try:
-            return self.connections[guild_id]
+            return self._connections[guild_id]
         except KeyError:
             return

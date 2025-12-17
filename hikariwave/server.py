@@ -31,10 +31,10 @@ class Protocol(asyncio.DatagramProtocol):
             The callback to call when we receive a non-IP discovery packet.
         """
         
-        self.transport: asyncio.DatagramTransport = None
+        self._transport: asyncio.DatagramTransport = None
 
-        self.ip_discover_future: asyncio.Future[bytes] = ip_discover_future
-        self.rtp_listener: Callable[[int], None] = rtp_listener
+        self._ip_discover_future: asyncio.Future[bytes] = ip_discover_future
+        self._rtp_listener: Callable[[int], None] = rtp_listener
 
     def connection_made(self, transport: asyncio.DatagramTransport) -> None:
         """
@@ -46,7 +46,7 @@ class Protocol(asyncio.DatagramProtocol):
             The UDP transport.
         """
         
-        self.transport = transport
+        self._transport = transport
 
     def datagram_received(self, data: bytes, address: tuple[str, int]) -> None:
         """
@@ -60,11 +60,11 @@ class Protocol(asyncio.DatagramProtocol):
             The address that sent this packet.
         """
 
-        if not self.ip_discover_future.done():
-            self.ip_discover_future.set_result(data)
+        if not self._ip_discover_future.done():
+            self._ip_discover_future.set_result(data)
             return
 
-        self.rtp_listener(data)
+        self._rtp_listener(data)
     
     def error_received(self, exc: Exception):
         """
@@ -76,8 +76,8 @@ class Protocol(asyncio.DatagramProtocol):
             The error that occurred.
         """
         
-        if self.ip_discover_future.done():
-            self.ip_discover_future.set_exception(exc)
+        if self._ip_discover_future.done():
+            self._ip_discover_future.set_exception(exc)
             return 
 
 class VoiceServer:
@@ -96,12 +96,12 @@ class VoiceServer:
             The voice client handling all bot connections and state.
         """
         
-        self.client: VoiceClient = client
+        self._client: VoiceClient = client
 
-        self.ip: str = None
-        self.port: int = None
-        self.ssrc: int = None
-        self.udp: asyncio.DatagramTransport = None
+        self._ip: str = None
+        self._port: int = None
+        self._ssrc: int = None
+        self._udp: asyncio.DatagramTransport = None
 
         self._last_audio: dict[int, float] = {}
         self._watch_task: asyncio.Task = None
@@ -110,13 +110,13 @@ class VoiceServer:
         loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         future: asyncio.Future[bytes] = loop.create_future()
 
-        self.udp, _ = await loop.create_datagram_endpoint(
+        self._udp, _ = await loop.create_datagram_endpoint(
             lambda: Protocol(future, self._rtp_packet),
-            remote_addr=(self.ip, self.port),
+            remote_addr=(self._ip, self._port),
         )
 
-        packet: bytes = struct.pack("!HHI", 0x1, 70, self.ssrc) + bytes(70)
-        self.udp.sendto(packet)
+        packet: bytes = struct.pack("!HHI", 0x1, 70, self._ssrc) + bytes(70)
+        self._udp.sendto(packet)
 
         data: bytes = await asyncio.wait_for(future, 3.0)
 
@@ -139,7 +139,7 @@ class VoiceServer:
 
         ssrc: int = struct.unpack_from(">I", data, 8)[0]
 
-        if ssrc not in self.client.ssrcs_reference:
+        if ssrc not in self._client._ssrcs_reference:
             return
 
         now: float = asyncio.get_running_loop().time()
@@ -149,12 +149,12 @@ class VoiceServer:
         if not is_new:
             return
         
-        user_id: hikari.Snowflake = self.client.ssrcs_reference[ssrc]
-        member: hikari.Member = self.client.views[user_id]
-        channel_id: hikari.Snowflake = self.client.members[member.id].channel_id
-        channel = self.client.channels[channel_id]
+        user_id: hikari.Snowflake = self._client._ssrcs_reference[ssrc]
+        member: hikari.Member = self._client._views[user_id]
+        channel_id: hikari.Snowflake = self._client._members[member.id].channel_id
+        channel = self._client._channels[channel_id]
         guild: hikari.Snowflake = channel.guild_id
-        self.client.event_factory.emit(
+        self._client._event_factory.emit(
             WaveEventType.MEMBER_START_SPEAKING,
             channel_id,
             guild,
@@ -162,7 +162,7 @@ class VoiceServer:
         )
 
         if len(channel.active) == 0:
-            self.client.event_factory.emit(
+            self._client._event_factory.emit(
                 WaveEventType.VOICE_ACTIVE,
                 channel_id,
                 guild,
@@ -183,15 +183,15 @@ class VoiceServer:
 
                     del self._last_audio[ssrc]
 
-                    user: hikari.Snowflake = self.client.ssrcs_reference[ssrc]
-                    member: hikari.Member = self.client.views[user]
-                    channel_id: hikari.Snowflake = self.client.members[member.id].channel_id
-                    channel = self.client.channels[channel_id]
+                    user: hikari.Snowflake = self._client._ssrcs_reference[ssrc]
+                    member: hikari.Member = self._client._views[user]
+                    channel_id: hikari.Snowflake = self._client._members[member.id].channel_id
+                    channel = self._client._channels[channel_id]
                     guild: hikari.Snowflake = channel.guild_id
 
                     channel.active.remove(user)
 
-                    self.client.event_factory.emit(
+                    self._client._event_factory.emit(
                         WaveEventType.MEMBER_STOP_SPEAKING,
                         channel,
                         guild,
@@ -199,7 +199,7 @@ class VoiceServer:
                     )
                 
                     if len(channel.active) == 0:
-                        self.client.event_factory.emit(
+                        self._client._event_factory.emit(
                             WaveEventType.VOICE_INACTIVE,
                             channel_id,
                             guild,
@@ -228,7 +228,7 @@ class VoiceServer:
             Our public, discovered IP address.
         """
         
-        self.ip, self.port, self.ssrc = ip, port, ssrc
+        self._ip, self._port, self._ssrc = ip, port, ssrc
 
         logger.debug(f"Connecting to voice server: IP={ip}, Port={port}, SSRC={ssrc}")
         local_address: tuple[str, int] = await self._discover_ip()
@@ -242,7 +242,7 @@ class VoiceServer:
         Disconnect from Discord's voice server.
         """
         
-        logger.debug(f"Disconnected from server: IP={self.ip}, Port={self.port}")
+        logger.debug(f"Disconnected from server: IP={self._ip}, Port={self._port}")
         
         if self._watch_task:
             self._watch_task.cancel()
@@ -250,9 +250,9 @@ class VoiceServer:
         
         self._last_audio.clear()
 
-        if self.udp:
-            self.udp.close()
-            self.udp = None
+        if self._udp:
+            self._udp.close()
+            self._udp = None
     
     async def send(self, data: bytes) -> None:
         """
@@ -264,7 +264,7 @@ class VoiceServer:
             The UDP packet to send.
         """
         
-        if not self.udp or self.udp.is_closing():
+        if not self._udp or self._udp.is_closing():
             return
     
-        self.udp.sendto(data)
+        self._udp.sendto(data)

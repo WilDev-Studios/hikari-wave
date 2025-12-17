@@ -76,32 +76,32 @@ class VoiceGateway:
             Our unique token provided by Discord's OAuth2 gateway.
         """
         
-        self.connection: VoiceConnection = connection
-        self.guild_id: hikari.Snowflakeish = guild_id
-        self.channel_id: hikari.Snowflakeish = channel_id
-        self.bot_id: hikari.Snowflakeish = bot_id
+        self._connection: VoiceConnection = connection
+        self._guild_id: hikari.Snowflakeish = guild_id
+        self._channel_id: hikari.Snowflakeish = channel_id
+        self._bot_id: hikari.Snowflakeish = bot_id
 
-        self.session_id: str = session_id
-        self.token: str = token
-        self.sequence: int = -1
-        self.ssrc: int = None
+        self._session_id: str = session_id
+        self._token: str = token
+        self._sequence: int = -1
+        self._ssrc: int = None
 
-        self.gateway: str = None
-        self.websocket: websockets.ClientConnection = None
-        self.callbacks: dict[Opcode, Callable[[Payload], Coroutine[Any, Any, None]]] = {}
+        self._gateway: str = None
+        self._websocket: websockets.ClientConnection = None
+        self._callbacks: dict[Opcode, Callable[[Payload], Coroutine[Any, Any, None]]] = {}
 
-        self.task_heartbeat: asyncio.Task = None
-        self.task_listener: asyncio.Task = None
+        self._task_heartbeat: asyncio.Task = None
+        self._task_listener: asyncio.Task = None
 
-        self.last_heartbeat_sent: float = 0.0
-        self.last_heartbeat_ack: float = 0.0
+        self._last_heartbeat_sent: float = 0.0
+        self._last_heartbeat_ack: float = 0.0
 
     async def _call_callback(self, opcode: Opcode, payload: Payload) -> None:
-        await self.callbacks[opcode](payload)
+        await self._callbacks[opcode](payload)
 
     async def _heartbeat(self) -> None:
         t: int = int(time.time())
-        seq_ack: int = self.sequence
+        seq_ack: int = self._sequence
 
         await self._send_packet({
             "op": Opcode.HEARTBEAT,
@@ -115,7 +115,7 @@ class VoiceGateway:
     async def _loop_heartbeat(self, interval: float) -> None:
         while True:
             await self._heartbeat()
-            self.last_heartbeat_sent = time.time()
+            self._last_heartbeat_sent = time.time()
 
             try:
                 await asyncio.sleep(interval)
@@ -128,11 +128,11 @@ class VoiceGateway:
             opcode: int = packet.get("op")
             data: dict[str, Any] = packet.get('d', {})
 
-            self.sequence = packet.get("seq", self.sequence)
+            self._sequence = packet.get("seq", self._sequence)
 
             match opcode:
                 case Opcode.READY:
-                    self.ssrc = data["ssrc"]
+                    self._ssrc = data["ssrc"]
                     await self._call_callback(Opcode.READY, ReadyPayload(
                         data["ssrc"], data["ip"], data["port"], data["modes"],
                     ))
@@ -144,17 +144,17 @@ class VoiceGateway:
                     user_id: int = int(data["user_id"])
                     ssrc: int = data["ssrc"]
 
-                    self.connection.client.ssrcs[user_id] = ssrc
-                    self.connection.client.ssrcs_reference[ssrc] = user_id
+                    self._connection._client._ssrcs[user_id] = ssrc
+                    self._connection._client._ssrcs_reference[ssrc] = user_id
                 case Opcode.HEARTBEAT_ACK:
                     self.last_heartbeat_ack = time.time()
                 case Opcode.RESUMED:
                     logger.info(f"Client session resumed after disconnect")
 
-                    self.connection.client.event_factory.emit(
+                    self._connection._client._event_factory.emit(
                         WaveEventType.VOICE_RECONNECT,
-                        self.channel_id,
-                        self.guild_id,
+                        self._channel_id,
+                        self._guild_id,
                     )
                 case Opcode.CLIENTS_CONNECT:...
                 case Opcode.CLIENT_DISCONNECT:...
@@ -170,19 +170,19 @@ class VoiceGateway:
         await self._send_packet({
             "op": Opcode.IDENTIFY,
             'd': {
-                "server_id": str(self.guild_id),
-                "user_id": str(self.bot_id),
-                "session_id": self.session_id,
-                "token": self.token,
+                "server_id": str(self._guild_id),
+                "user_id": str(self._bot_id),
+                "session_id": self._session_id,
+                "token": self._token,
             },
         })
         logger.debug(
-            f"Identified with gateway: Server={self.guild_id}, User={self.bot_id}, Session={self.session_id}, Token={self.token}"
+            f"Identified with gateway: Server={self._guild_id}, User={self._bot_id}, Session={self._session_id}, Token={self._token}"
         )
 
     async def _recv_packet(self) -> dict[str, Any]:
         try:
-            packet: dict[str, Any] = json.loads(await self.websocket.recv())
+            packet: dict[str, Any] = json.loads(await self._websocket.recv())
             return packet
         except json.JSONDecodeError as e:
             await self.disconnect()
@@ -194,9 +194,9 @@ class VoiceGateway:
 
             logger.debug(f"Websocket connection was closed")
 
-            match e.code:
+            match e.rcvd.code:
                 case CloseCode.SESSION_NO_LONGER_VALID | CloseCode.SESSION_TIMEOUT:
-                    await self.connection._gateway_reconnect()
+                    await self._connection._gateway_reconnect()
                     return {}
                 case CloseCode.VOICE_SERVER_CRASHED:
                     await self._resume()
@@ -207,16 +207,16 @@ class VoiceGateway:
         await self._send_packet({
             "op": Opcode.RESUME,
             'd': {
-                "server_id": str(self.guild_id),
-                "session_id": self.session_id,
-                "token": self.token,
-                "seq_ack": self.sequence,
+                "server_id": str(self._guild_id),
+                "session_id": self._session_id,
+                "token": self._token,
+                "seq_ack": self._sequence,
             }
         })
 
     async def _send_packet(self, data: dict[str, Any]) -> None:
         try:
-            await self.websocket.send(json.dumps(data))
+            await self._websocket.send(json.dumps(data))
         finally:
             return
         
@@ -251,10 +251,10 @@ class VoiceGateway:
         """
         
         logger.debug(f"Connecting to gateway: {gateway_url}")
-        self.gateway = gateway_url
+        self._gateway = gateway_url
 
         try:
-            self.websocket = await websockets.connect(self.gateway)
+            self._websocket = await websockets.connect(self._gateway)
         except OSError as e:
             error: str = f"TCP handshake failed: {e}"
             raise GatewayError(error)
@@ -266,36 +266,36 @@ class VoiceGateway:
             raise GatewayError(error)
 
         heartbeat_interval: float = await self._wait_hello()
-        self.task_heartbeat = asyncio.create_task(self._loop_heartbeat(heartbeat_interval))
+        self._task_heartbeat = asyncio.create_task(self._loop_heartbeat(heartbeat_interval))
 
         await self._identify()
 
-        self.task_listener = asyncio.create_task(self._loop_listen())
+        self._task_listener = asyncio.create_task(self._loop_listen())
     
     async def disconnect(self) -> None:
         """
         Disconnect from Discord's voice gateway.
         """
         
-        logger.debug(f"Disconnecting from gateway: {self.gateway}")
+        logger.debug(f"Disconnecting from gateway: {self._gateway}")
 
-        if self.task_listener:
-            self.task_listener.cancel()
-            self.task_listener = None
+        if self._task_listener:
+            self._task_listener.cancel()
+            self._task_listener = None
         
-        if self.task_heartbeat:
-            self.task_heartbeat.cancel()
-            self.task_heartbeat = None
+        if self._task_heartbeat:
+            self._task_heartbeat.cancel()
+            self._task_heartbeat = None
         
-        if self.websocket:
-            await self.websocket.close()
-            self.websocket = None
+        if self._websocket:
+            await self._websocket.close()
+            self._websocket = None
         
-        self.sequence = -1
-        self.gateway = None
+        self._sequence = -1
+        self._gateway = None
 
-        self.last_heartbeat_ack = 0.0
-        self.last_heartbeat_sent = 0.0
+        self._last_heartbeat_ack = 0.0
+        self._last_heartbeat_sent = 0.0
 
     async def select_protocol(self, ip: str, port: int, mode: str) -> None:
         """
@@ -335,7 +335,7 @@ class VoiceGateway:
             The callback to call when we receive the opcode.
         """
         
-        self.callbacks[opcode] = callback
+        self._callbacks[opcode] = callback
 
     async def set_speaking(self, state: bool) -> None:
         """
@@ -352,7 +352,7 @@ class VoiceGateway:
             'd': {
                 "speaking": int(state),
                 "delay": 0,
-                "ssrc": self.ssrc,
+                "ssrc": self._ssrc,
             },
         })
         logger.debug(f"Set speaking state to {state}")

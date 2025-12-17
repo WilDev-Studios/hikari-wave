@@ -46,68 +46,68 @@ class VoiceConnection:
             The provided token from Discord's OAuth2 gateway.
         """
         
-        self.client: VoiceClient = client
-        self.guild_id: hikari.Snowflakeish = guild_id
-        self.channel_id: hikari.Snowflakeish = channel_id
-        self.endpoint: str = endpoint
-        self.session_id: str = session_id
-        self.token: str = token
+        self._client: VoiceClient = client
+        self._guild_id: hikari.Snowflakeish = guild_id
+        self._channel_id: hikari.Snowflakeish = channel_id
+        self._endpoint: str = endpoint
+        self._session_id: str = session_id
+        self._token: str = token
 
-        self.server: VoiceServer = VoiceServer(self.client)
-        self.gateway: VoiceGateway = VoiceGateway(
+        self._server: VoiceServer = VoiceServer(self._client)
+        self._gateway: VoiceGateway = VoiceGateway(
             self,
-            self.guild_id,
-            self.channel_id,
-            self.client.bot.get_me().id,
-            self.session_id,
-            self.token,
+            self._guild_id,
+            self._channel_id,
+            self._client.bot.get_me().id,
+            self._session_id,
+            self._token,
         )
-        self.gateway.set_callback(Opcode.READY, self._gateway_ready)
-        self.gateway.set_callback(Opcode.SESSION_DESCRIPTION, self._gateway_session_description)
-        self.ready: asyncio.Event = asyncio.Event()
+        self._gateway.set_callback(Opcode.READY, self._gateway_ready)
+        self._gateway.set_callback(Opcode.SESSION_DESCRIPTION, self._gateway_session_description)
+        self._ready: asyncio.Event = asyncio.Event()
 
-        self.ssrc: int = None
-        self.mode: str = None
+        self._ssrc: int = None
+        self._mode: str = None
 
-        self.player: AudioPlayer = AudioPlayer(self)
+        self._player: AudioPlayer = AudioPlayer(self)
     
     async def _connect(self) -> None:
-        await self.gateway.connect(f"{self.endpoint}/?v=8")
-        await self.ready.wait()
+        await self._gateway.connect(f"{self._endpoint}/?v=8")
+        await self._ready.wait()
 
     async def _disconnect(self) -> None:
-        await self.server.disconnect()
-        await self.gateway.disconnect()
+        await self._server.disconnect()
+        await self._gateway.disconnect()
 
     async def _gateway_ready(self, payload: ReadyPayload) -> None:
-        self.ssrc = payload.ssrc
+        self._ssrc = payload.ssrc
         
         supported_mode: str = "aead_xchacha20_poly1305_rtpsize"
-        ip, port = await self.server.connect(payload.ip, payload.port, self.ssrc)
+        ip, port = await self._server.connect(payload.ip, payload.port, self._ssrc)
 
-        await self.gateway.select_protocol(ip, port, supported_mode)
+        await self._gateway.select_protocol(ip, port, supported_mode)
 
     async def _gateway_reconnect(self) -> None:
-        self.gateway = VoiceGateway(
+        self._gateway = VoiceGateway(
             self,
-            self.guild_id,
-            self.channel_id,
-            self.client.bot.get_me().id,
-            self.session_id,
-            self.token,
+            self._guild_id,
+            self._channel_id,
+            self._client.bot.get_me().id,
+            self._session_id,
+            self._token,
         )
-        await self.gateway.connect(f"{self.endpoint}/?v=8")
+        await self._gateway.connect(f"{self._endpoint}/?v=8")
 
-        self.client.event_factory.emit(
+        self._client._event_factory.emit(
             WaveEventType.VOICE_RECONNECT,
-            self.channel_id,
-            self.guild_id,
+            self._channel_id,
+            self._guild_id,
         )
 
     async def _gateway_session_description(self, payload: SessionDescriptionPayload) -> None:
-        self.mode = payload.mode
-        self.secret = payload.secret
-        self.ready.set()
+        self._mode = payload.mode
+        self._secret = payload.secret
+        self._ready.set()
     
     async def add_queue(self, source: AudioSource) -> None:
         """
@@ -119,7 +119,7 @@ class VoiceConnection:
             The source to add to the queue.
         """
 
-        await self.player.add_queue(source)
+        await self._player.add_queue(source)
     
     async def add_queue_file(self, filepath: str) -> None:
         """
@@ -134,39 +134,54 @@ class VoiceConnection:
         source: FileAudioSource = FileAudioSource(filepath)
         await self.add_queue(source)
 
+    @property
+    def channel_id(self) -> hikari.Snowflakeish:
+        """The ID of the channel this connection is in."""
+        return self._channel_id
+
     async def clear_queue(self) -> None:
         """
         Clear audio from the player's queue.
         """
 
-        await self.player.clear_queue()
+        await self._player.clear_queue()
+
+    @property
+    def client(self) -> hikari.GatewayBot:
+        """The controlling OAuth2 bot."""
+        return self._client
 
     async def disconnect(self) -> None:
         """
         Disconnect from the current channel.
         """
         
-        await self.client.disconnect(self.guild_id)
+        await self._client.disconnect(self._guild_id)
     
+    @property
+    def guild_id(self) -> hikari.Snowflakeish:
+        """The ID of the guild this connection is in."""
+        return self._guild_id
+
     @property
     def latency_gateway(self) -> float:
         """Get the heartbeat latency of this connection with Discord's gateway."""
         
-        return self.gateway.last_heartbeat_ack - self.gateway.last_heartbeat_sent
+        return self._gateway._last_heartbeat_ack - self._gateway._last_heartbeat_sent
     
     async def next(self) -> None:
         """
         Play the next audio in queue.
         """
 
-        await self.player.next()
+        await self._player.next()
 
     async def pause(self) -> None:
         """
         Pause playback of the current audio.
         """
         
-        await self.player.pause()
+        await self._player.pause()
 
     async def play(self, source: AudioSource) -> None:
         """
@@ -178,7 +193,7 @@ class VoiceConnection:
             The source that contains the audio.
         """
 
-        await self.player.play(source)
+        await self._player.play(source)
 
     async def play_file(self, filepath: str) -> None:
         """
@@ -193,12 +208,17 @@ class VoiceConnection:
         source: FileAudioSource = FileAudioSource(filepath)
         await self.play(source)
     
+    @property
+    def player(self) -> AudioPlayer:
+        """The audio player associated with this connection."""
+        return self._player
+
     async def previous(self) -> None:
         """
         Play the latest previously played audio.
         """
 
-        await self.player.previous()
+        await self._player.previous()
 
     async def remove_queue(self, source: AudioSource) -> None:
         """
@@ -210,7 +230,7 @@ class VoiceConnection:
             The source to remove from the queue.
         """
 
-        await self.player.remove_queue(source)
+        await self._player.remove_queue(source)
     
     async def remove_queue_file(self, filepath: str) -> None:
         """
@@ -230,11 +250,11 @@ class VoiceConnection:
         Resume playback of the current audio.
         """
         
-        await self.player.resume()
+        await self._player.resume()
     
     async def stop(self) -> None:
         """
         Stop playback of the current audio.
         """
         
-        await self.player.stop()
+        await self._player.stop()

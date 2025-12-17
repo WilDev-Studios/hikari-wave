@@ -31,7 +31,7 @@ class AudioSource(ABC):
     def __repr__(self) -> str:
         args: list[str] = []
         for key, value in self.__dict__.items():
-            args.append(f"{key}={value}")
+            args.append(f"{key.lstrip('_')}={value}")
 
         return f"{self.__class__.__name__}({', '.join(args)})"
 
@@ -78,10 +78,10 @@ class FileAudioSource(AudioSource):
         Parameters
         ----------
         filepath : str
-            The path, relative or absolute, to the audio file.
+            The path, absolute or relative, to the audio file.
         """
         
-        self.filepath: str = filepath
+        self._filepath: str = filepath
     
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, FileAudioSource): return False
@@ -90,12 +90,17 @@ class FileAudioSource(AudioSource):
     def __hash__(self) -> int:
         return hash(self.filepath)
 
+    @property
+    def filepath(self) -> str:
+        """The path, absolute or relative, to the audio file."""
+        return self._filepath
+
     async def read(self) -> bytes:
-        async with aiofiles.open(self.filepath, "rb") as file:
+        async with aiofiles.open(self._filepath, "rb") as file:
             return await file.read()
     
     async def stream(self, size: int) -> AsyncGenerator[bytes, Any]:
-        async with aiofiles.open(self.filepath, "rb") as file:
+        async with aiofiles.open(self._filepath, "rb") as file:
             while True:
                 chunk: bytes = await file.read(size)
 
