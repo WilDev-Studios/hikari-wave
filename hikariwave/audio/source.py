@@ -71,7 +71,7 @@ class AudioSource(ABC):
 class FileAudioSource(AudioSource):
     """File audio source implementation."""
 
-    def __init__(self, filepath: str) -> None:
+    def __init__(self, filepath: str, *, name: str | None = None) -> None:
         """
         Create a file audio source.
         
@@ -79,9 +79,14 @@ class FileAudioSource(AudioSource):
         ----------
         filepath : str
             The path, absolute or relative, to the audio file.
+        name : str | None
+            If provided, an internal name used for display purposes - Default `None`.
         """
         
         self._filepath: str = filepath
+
+        self.name: str | None = name
+        """The assigned name of this source for display purposes, if provided."""
     
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, FileAudioSource): return False
