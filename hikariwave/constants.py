@@ -16,15 +16,24 @@ class Audio:
     """Collection of audio-related constants."""
 
     BIT_16U: int = 2**16 - 1
+    """16 bit, unsigned integer."""
     BIT_32U: int = 2**32 - 1
+    """32 bit, unsigned integer."""
     BLOCKSIZE: int = io.DEFAULT_BUFFER_SIZE
+    """FFmpeg blocksize."""
     CHANNELS: int = 2
+    """Audio channels."""
     FRAME_LENGTH: int = 20
+    """Length of Opus frame in milliseconds."""
     SAMPLE_SIZE: int = struct.calcsize('h') * CHANNELS
+    """Size of frame sample."""
     SAMPLING_RATE: int = 48000
+    """Sampling rate/"""
     SAMPLES_PER_FRAME: int = int(SAMPLING_RATE / 1000 * FRAME_LENGTH)
+    """Amount of samples per Opus frame."""
 
     FRAME_SIZE: int = SAMPLES_PER_FRAME * SAMPLE_SIZE
+    """Total size of Opus frame."""
 
 class CloseCode(IntEnum):
     """Collection of a voice close event codes."""
