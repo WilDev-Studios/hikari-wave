@@ -79,7 +79,7 @@ Super easy and convenient!
     2. [ ] Web (URLs)
     3. [ ] YouTube
     4. [ ] Others (SoundCloud, buffers, etc.)
-- [ ] Player QoL (queue, shuffle, prev/next, etc.)
+- [X] Player QoL (queue, shuffle, prev/next, etc.)
 - [ ] DAVE (Discord Audio/Video End-to-End Encryption)
 
 ## Reporting Bugs

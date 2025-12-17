@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import asyncio
 import logging
 import nacl.secret as secret
+import random
 import struct
 import time
 
@@ -305,6 +306,17 @@ class AudioPlayer:
             logger.error(f"Error setting speaking state in resume: {e}")
         
         self._resumed.set()
+
+    async def shuffle(self) -> None:
+        """
+        Shuffle all audio currently in queue.
+        """
+
+        async with self._lock:
+            temp: list[AudioSource] = list(self._queue)
+            random.shuffle(temp)
+            self._queue.clear()
+            self._queue.extend(temp)
 
     async def stop(self) -> None:
         """

@@ -252,6 +252,13 @@ class VoiceConnection:
         
         await self._player.resume()
     
+    async def shuffle(self) -> None:
+        """
+        Shuffle all audio in the player's queue.
+        """
+
+        await self._player.shuffle()
+
     async def stop(self) -> None:
         """
         Stop playback of the current audio.
