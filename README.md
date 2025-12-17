@@ -2,7 +2,7 @@
 
 Voice module for `hikari`-based Discord bots
 
-- Latest Version `0.0.1a1`
+- Latest Version `0.0.1a2`
 - Supports Python `3.10+`
 
 [![Documentation Status](https://readthedocs.org/projects/hikari-wave/badge/?version=latest&style=for-the-badge)](https://hikari-wave.readthedocs.io/en/latest/?badge=latest)
