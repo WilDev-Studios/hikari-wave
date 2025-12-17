@@ -106,15 +106,10 @@ class AudioPlayer:
                     start_time = time.perf_counter()
                     continue
 
-                pcm: bytes = await self._connection._client._ffmpeg.decode(Audio.FRAME_SIZE)
-
-                if not pcm or len(pcm) < Audio.FRAME_SIZE:
-                    self._track_completed = True
-                    break
-
-                opus: bytes = await self._connection._client._opus.encode(pcm)
+                opus: bytes = await self._connection._client._ffmpeg.read()
 
                 if not opus:
+                    self._track_completed = True
                     break
 
                 header: bytes = self._generate_rtp()
@@ -138,8 +133,9 @@ class AudioPlayer:
         except Exception as e:
             logger.error(f"Error during playback: {e}")
             return False
-        finally:
+        finally:        
             try:
+                await self._connection._client._ffmpeg.stop()
                 await self._send_silence()
                 await self._connection._gateway.set_speaking(False)
             except Exception as e:

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hikariwave.audio.ffmpeg import FFmpegDecoder
-from hikariwave.audio.opus import OpusEncoder
+from hikariwave.audio.ffmpeg import FFmpeg
 from hikariwave.connection import VoiceConnection
 from hikariwave.error import GatewayError
 from hikariwave.event.factory import EventFactory
@@ -76,8 +75,7 @@ class VoiceClient:
 
         self._event_factory: EventFactory = EventFactory(self._bot)
 
-        self._ffmpeg: FFmpegDecoder = FFmpegDecoder()
-        self._opus: OpusEncoder = OpusEncoder()
+        self._ffmpeg: FFmpeg = FFmpeg()
     
     async def _disconnect(self, guild_id: hikari.Snowflakeish) -> None:
         connection: VoiceConnection = self._connections.pop(guild_id)
@@ -95,7 +93,6 @@ class VoiceClient:
         )
 
         if len(self._connections) == 0:
-            await self._opus.stop()
             await self._ffmpeg.stop()
 
     async def _disconnected(self, event: hikari.VoiceStateUpdateEvent) -> None:
@@ -294,9 +291,6 @@ class VoiceClient:
             deaf,
             mute,
         )
-
-        if len(self._connections) == 1:
-            await self._opus.start()
 
         return connection
     

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from hikariwave.constants import Audio
 
 import asyncio
@@ -7,103 +8,120 @@ import logging
 
 logger: logging.Logger = logging.getLogger("hikariwave.ffmpeg")
 
-class FFmpegDecoder:
-    """Decodes audio into PCM frames."""
+class FFmpeg:
+    """Handles both decoding audio to PCM and encoding to Opus using FFmpeg."""
 
     def __init__(self) -> None:
         """
-        Create a new FFmpeg decoder.
+        Create a new FFmpeg audio handler.
         """
         
         self._process: asyncio.subprocess.Process = None
+        self._queue: deque[bytes] = deque()
     
-    async def decode(self, size: int) -> bytes:
+    async def read(self) -> bytes | None:
         """
-        Decode the audio into PCM.
-
-        Parameters
-        ----------
-        size : int
-            The amount of audio to return.
+        Read the next Opus packet from the FFmpeg audio stream.
         
         Returns
         -------
         bytes | None
-            The decoded PCM audio.
+            The Opus packet, if present.
         """
 
-        if not self._process: return
-        return await self._process.stdout.read(size)
+        if self._queue:
+            return self._queue.popleft()
+
+        if not self._process or not self._process.stdout or self._process.stdout.at_eof():
+            return None
+        
+        try:
+            header: bytes = await self._process.stdout.readexactly(27)
+            if not header.startswith(b"OggS"):
+                return None
+            
+            segments_count: int = header[26]
+            segment_table: bytes = await self._process.stdout.readexactly(segments_count)
+    
+            current_packet: bytearray = bytearray()
+            for lacing_value in segment_table:
+                data: bytes = await self._process.stdout.readexactly(lacing_value)
+                current_packet.extend(data)
+
+                if lacing_value < 255:
+                    packet_bytes: bytes = bytes(current_packet)
+
+                    if not (
+                        packet_bytes.startswith(b"OpusHead") or
+                        packet_bytes.startswith(b"OpusTags")
+                    ):
+                        self._queue.append(packet_bytes)
+                    
+                    current_packet.clear()
+            
+            return self._queue.popleft() if self._queue else await self.read()
+        except asyncio.IncompleteReadError | AttributeError | IndexError:
+            return None
 
     async def start(self, raw: bytes | str) -> None:
         """
-        Start FFmpeg decoding audio.
-        
-        Parameters
-        ----------
-        raw : bytes | str
-            The raw audio data or filepath.
+        Start the (en/de)coding process of an input.
         """
-
-        if self._process:
-            await self.stop()
         
-        if isinstance(raw, bytes):
-            self._process = await asyncio.create_subprocess_exec(
-                "ffmpeg",
-                "-i", "pipe:0",
-                "-f", "s16le",
-                "-ar", str(Audio.SAMPLING_RATE),
-                "-ac", str(Audio.CHANNELS),
-                "-loglevel", "warning",
-                "-blocksize", str(Audio.BLOCKSIZE),
-                "pipe:1",
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-            )
+        await self.stop()
+        
+        args: list[str] = [
+            "ffmpeg",
+            "-i", "pipe:0" if isinstance(raw, bytes) else raw,
+            "-map", "0:a",
+            "-acodec", "libopus",
+            "-f", "opus",
+            "-ar", str(Audio.SAMPLING_RATE),
+            "-ac", str(Audio.CHANNELS),
+            "-b:a", "96k",
+            "-application", "audio",
+            "-frame_duration", str(Audio.FRAME_LENGTH),
+            "-loglevel", "warning",
+            "pipe:1",
+        ]
 
-            self._process.stdin.write(raw)
-            await self._process.stdin.drain()
-            self._process.stdin.close()
-            await self._process.stdin.wait_closed()
-        else:
-            self._process = await asyncio.create_subprocess_exec(
-                "ffmpeg",
-                "-i", raw,
-                "-f", "s16le",
-                "-ar", str(Audio.SAMPLING_RATE),
-                "-ac", str(Audio.CHANNELS),
-                "-loglevel", "warning",
-                "-blocksize", str(Audio.BLOCKSIZE),
-                "pipe:1",
-                stdout=asyncio.subprocess.PIPE,
-            )
+        self._process = await asyncio.create_subprocess_exec(
+            *args,
+            stdin=asyncio.subprocess.PIPE if isinstance(raw, bytes) else None,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+        if isinstance(raw, bytes):
+            try:
+                self._process.stdin.write(raw)
+                await self._process.stdin.drain()
+                self._process.stdin.close()
+                await self._process.stdin.wait_closed()
+            except:
+                pass
     
     async def stop(self) -> None:
         """
-        Stop the decoding of audio.
+        Terminate the FFmpeg process.
         """
-        
+
         if not self._process:
             return
         
-        try:
-            if self._process.stdin and not self._process.stdin.is_closing():
+        for stream in (self._process.stdin, self._process.stdout, self._process.stderr):
+            if stream and hasattr(stream, "_transport"):
                 try:
-                    self._process.stdin.close()
-                    await self._process.stdin.wait_closed()
-                except:...
-            
-            if self._process.returncode is None:
-                self._process.terminate()
+                    stream._transport.close()
+                except:
+                    pass
+        
+        if self._process.returncode is None:
+            try:
+                self._process.kill()
+                await self._process.wait()
+            except ProcessLookupError:
+                pass
 
-                try:
-                    await asyncio.wait_for(self._process.wait(), 0.5)
-                except asyncio.TimeoutError:
-                    self._process.kill()
-                    await self._process.wait()
-        except ProcessLookupError:...
-        except Exception as e:
-            logger.debug(f"Error stopping FFmpeg: {e}")
-        finally:
-            self._process = None
+        self._process = None
+        self._queue.clear()
