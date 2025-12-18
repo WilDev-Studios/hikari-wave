@@ -8,7 +8,7 @@ Voice module for `hikari`-based Discord bots
 
 ## What are hikari-wave's features?
 
-- Doesn't require third-party installs besides `ffmpeg`
+- Doesn't require third-party installs besides [FFmpeg](https://ffmpeg.org/download.html).
 - Easy to use, asynchronous API
 - Heavily type-hinted and type-safe
 - Supplemental events for further development ease and QoL
@@ -17,6 +17,7 @@ Voice module for `hikari`-based Discord bots
 
 - Install `hikari-wave` via `PyPI`: `pip install hikari-wave`
 - Import it into your program using `import hikariwave`
+- Verify [FFmpeg](https://ffmpeg.org/download.html) is installed and discoverable in your system's `PATH`.
 
 ## Documentation
 
@@ -51,13 +52,15 @@ async def member_left_voice(event: hikariwave.MemberLeaveVoiceEvent) -> None:
 bot.run()
 ```
 
-To make this play audio, get the connection and then play:
+To make this play audio, get the connection and then play a file source:
 
 ```python
 @bot.listen(hikariwave.MemberJoinVoiceEvent)
 async def member_joined_voice(event: hikariwave.MemberJoinVoiceEvent) -> None:
     connection: hikariwave.VoiceConnection = await voice.connect(event.guild_id, event.channel_id)
-    await connection.play_file("test.mp3")
+    source: FileAudioSource = FileAudioSource("test.mp3")
+
+    await connection.play(source)
 ```
 
 Super easy and convenient!

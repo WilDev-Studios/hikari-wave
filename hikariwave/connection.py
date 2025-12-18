@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from hikariwave.audio.player import AudioPlayer
-from hikariwave.audio.source import AudioSource, FileAudioSource
+from hikariwave.audio.source import AudioSource
 from hikariwave.event.types import WaveEventType
 from hikariwave.gateway import Opcode, ReadyPayload, SessionDescriptionPayload, VoiceGateway
 from hikariwave.server import VoiceServer
@@ -11,7 +11,7 @@ import asyncio
 import hikari
 
 if TYPE_CHECKING:
-    from .client import VoiceClient
+    from hikariwave.client import VoiceClient
 
 __all__: Final[Sequence[str]] = ("VoiceConnection",)
 
@@ -121,19 +121,6 @@ class VoiceConnection:
 
         await self._player.add_queue(source)
     
-    async def add_queue_file(self, filepath: str) -> None:
-        """
-        Add audio to the player's queue from an audio file.
-        
-        Parameters
-        ----------
-        filepath : str
-            The path, absolute or relative, to the audio file.
-        """
-
-        source: FileAudioSource = FileAudioSource(filepath)
-        await self.add_queue(source)
-
     @property
     def channel_id(self) -> hikari.Snowflakeish:
         """The ID of the channel this connection is in."""
@@ -194,19 +181,6 @@ class VoiceConnection:
         """
 
         await self._player.play(source)
-
-    async def play_file(self, filepath: str) -> None:
-        """
-        Play audio from a file.
-        
-        Parameters
-        ----------
-        filepath : str
-            The path, absolute or relative, to the file to play.
-        """
-        
-        source: FileAudioSource = FileAudioSource(filepath)
-        await self.play(source)
     
     @property
     def player(self) -> AudioPlayer:
@@ -232,19 +206,6 @@ class VoiceConnection:
 
         await self._player.remove_queue(source)
     
-    async def remove_queue_file(self, filepath: str) -> None:
-        """
-        Remove a file audio source from the player's queue.
-        
-        Parameters
-        ----------
-        filepath : str
-            The path, absolute or relative, to the audio file.
-        """
-
-        source: FileAudioSource = FileAudioSource(filepath)
-        await self.remove_queue(source)
-
     async def resume(self) -> None:
         """
         Resume playback of the current audio.

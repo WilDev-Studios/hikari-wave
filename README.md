@@ -63,7 +63,9 @@ To make this play audio, get the connection and then play:
 @bot.listen(hikariwave.MemberJoinVoiceEvent)
 async def member_joined_voice(event: hikariwave.MemberJoinVoiceEvent) -> None:
     connection: hikariwave.VoiceConnection = await voice.connect(event.guild_id, event.channel_id)
-    await connection.play_file("test.mp3")
+    source: FileAudioSource = FileAudioSource("test.mp3")
+
+    await connection.play(source)
 ```
 
 Super easy and convenient!
@@ -76,9 +78,9 @@ Super easy and convenient!
 - [X] Supplemental events
 - Audio types: files, URLs, etc.
     1. [X] Files
-    2. [ ] Web (URLs)
-    3. [ ] YouTube
-    4. [ ] Others (SoundCloud, buffers, etc.)
+    2. [X] Web (URLs)
+    3. [X] Buffers (`bytes`-like)
+    4. [ ] Media sites (YouTube, SoundCloud, etc.)
 - [X] Player QoL (queue, shuffle, prev/next, etc.)
 - [ ] DAVE (Discord Audio/Video End-to-End Encryption)
 
