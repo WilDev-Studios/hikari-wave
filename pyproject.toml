@@ -28,7 +28,6 @@ classifiers = [
 ]
 keywords = ["async", "bot", "voice", "discord", "hikari"]
 dependencies = [
-    "aiofiles>=25.1,<26",
     "hikari>=2.5,<3",
     "PyNaCl>=1.6,<2",
     "websockets>=15.0,<16",

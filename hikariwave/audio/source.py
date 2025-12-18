@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, AsyncGenerator
-
-import aiofiles
 
 __all__ = (
     "AudioSource",
@@ -57,7 +54,7 @@ class FileAudioSource(AudioSource):
     
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, FileAudioSource): return False
-        return self.filepath == other.filepath
+        return self._filepath == other._filepath
 
     def __hash__(self) -> int:
         return hash(self.filepath)
@@ -66,17 +63,3 @@ class FileAudioSource(AudioSource):
     def filepath(self) -> str:
         """The path, absolute or relative, to the audio file."""
         return self._filepath
-
-    async def read(self) -> bytes:
-        async with aiofiles.open(self._filepath, "rb") as file:
-            return await file.read()
-    
-    async def stream(self, size: int) -> AsyncGenerator[bytes, Any]:
-        async with aiofiles.open(self._filepath, "rb") as file:
-            while True:
-                chunk: bytes = await file.read(size)
-
-                if not chunk or len(chunk) != size:
-                    return
-
-                yield chunk
