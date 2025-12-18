@@ -35,39 +35,6 @@ class AudioSource(ABC):
 
         return f"{self.__class__.__name__}({', '.join(args)})"
 
-    @abstractmethod
-    async def read(self) -> bytes:
-        """
-        Read the entire contents of this source.
-        
-        Returns
-        -------
-        bytes
-            The contents of this source.
-        """
-
-        error: str = "AudioSource.read should only be called in a subclass"
-        raise NotImplementedError(error)
-
-    @abstractmethod
-    async def stream(self, size: int) -> AsyncGenerator[bytes, Any]:
-        """
-        Stream the contents of this source in chunks.
-        
-        Parameters
-        ----------
-        size : int
-            The amount of bytes to stream in each chunk.
-        
-        Yields
-        ------
-        bytes
-            Each chunk of audio from this source.
-        """
-
-        error: str = "AudioSource.stream should only be called in a subclass"
-        raise NotImplementedError(error)
-
 class FileAudioSource(AudioSource):
     """File audio source implementation."""
 
