@@ -5,7 +5,7 @@ from hikariwave.audio.source import AudioSource
 from hikariwave.event.types import WaveEventType
 from hikariwave.gateway import Opcode, ReadyPayload, SessionDescriptionPayload, VoiceGateway
 from hikariwave.server import VoiceServer
-from typing import Final, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import asyncio
 import hikari
@@ -13,10 +13,15 @@ import hikari
 if TYPE_CHECKING:
     from hikariwave.client import VoiceClient
 
-__all__: Final[Sequence[str]] = ("VoiceConnection",)
+__all__ = ("VoiceConnection",)
 
 class VoiceConnection:
     """An active connection to a Discord voice channel."""
+
+    __slots__ = (
+        "_client", "_guild_id", "_channel_id", "_endpoint", "_session_id", "_token",
+        "_server", "_gateway", "_ready", "_ssrc", "_mode", "_secret", "_player",
+    )
 
     def __init__(
         self,
@@ -68,6 +73,7 @@ class VoiceConnection:
 
         self._ssrc: int = None
         self._mode: str = None
+        self._secret: bytes = None
 
         self._player: AudioPlayer = AudioPlayer(self)
     

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from hikariwave.constants import CloseCode, Opcode
 from hikariwave.error import GatewayError
 from hikariwave.event.types import WaveEventType
-from typing import Any, Callable, Coroutine, Final, Sequence, TYPE_CHECKING
+from typing import Any, Callable, Coroutine, TYPE_CHECKING
 
 import asyncio
 import hikari
@@ -16,14 +16,14 @@ import websockets
 if TYPE_CHECKING:
     from .connection import VoiceConnection
 
-__all__: Final[Sequence[str]] = ("VoiceGateway",)
+__all__ = ("VoiceGateway",)
 
 logger: logging.Logger = logging.getLogger("hikari-wave.gateway")
 
 class Payload:
     """Base payload implementation."""
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ReadyPayload(Payload):
     """READY gateway payload."""
 
@@ -36,7 +36,7 @@ class ReadyPayload(Payload):
     modes: list[str]
     """All acceptable encryption modes that Discord's voice server supports."""
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class SessionDescriptionPayload(Payload):
     """SESSION_DESCRIPTION gateway payload."""
 
@@ -47,6 +47,14 @@ class SessionDescriptionPayload(Payload):
 
 class VoiceGateway:
     """The background communication system with Discord's voice gateway."""
+
+    __slots__ = (
+        "_connection", "_guild_id", "_channel_id", "_bot_id",
+        "_session_id", "_token", "_sequence", "_ssrc",
+        "_gateway", "_websocket", "_callbacks",
+        "_task_heartbeat", "_task_listener",
+        "_last_heartbeat_sent", "_last_heartbeat_ack",
+    )
 
     def __init__(
         self,
@@ -147,7 +155,7 @@ class VoiceGateway:
                     self._connection._client._ssrcs[user_id] = ssrc
                     self._connection._client._ssrcsr[ssrc] = user_id
                 case Opcode.HEARTBEAT_ACK:
-                    self.last_heartbeat_ack = time.time()
+                    self._last_heartbeat_ack = time.time()
                 case Opcode.RESUMED:
                     logger.info(f"Client session resumed after disconnect")
 
@@ -187,7 +195,7 @@ class VoiceGateway:
         except json.JSONDecodeError as e:
             await self.disconnect()
 
-            error: str = f"Couldn't decode websocket packet: {e}\n{packet}"
+            error: str = f"Couldn't decode websocket packet: {e}"
             raise GatewayError(error)
         except websockets.ConnectionClosed as e:
             await self.disconnect()

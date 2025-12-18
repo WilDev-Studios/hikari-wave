@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from hikariwave.event import events
 from hikariwave.event.types import WaveEventType
-from typing import Callable, Final, Sequence, TypeAlias
+from typing import Callable, TypeAlias
 
 import hikari
 
-__all__: Final[Sequence[str]] = ("EventFactory",)
+__all__ = ("EventFactory",)
 
 EventBuilder: TypeAlias = Callable[[tuple], events.WaveEvent]
 

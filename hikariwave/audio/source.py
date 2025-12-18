@@ -39,9 +39,6 @@ class BufferAudioSource(AudioSource):
 
     __slots__ = ("_buffer", "name",)
 
-    _buffer: bytearray | bytes | memoryview
-    name: str | None
-
     def __init__(self, buffer: bytearray | bytes | memoryview, *, name: str | None = None) -> None:
         """
         Create a buffered audio source.
@@ -76,9 +73,6 @@ class FileAudioSource(AudioSource):
 
     __slots__ = ("_filepath", "name",)
 
-    _filepath: str
-    name: str | None
-
     def __init__(self, filepath: str, *, name: str | None = None) -> None:
         """
         Create a file audio source.
@@ -112,9 +106,6 @@ class URLAudioSource(AudioSource):
     """URL audio source implementation."""
 
     __slots__ = ("_url", "name",)
-
-    _url: str
-    name: str | None
 
     def __init__(self, url: str, *, name: str | None = None) -> None:
         """

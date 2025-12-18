@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Final, Sequence
 
 import io
 import struct
 
-__all__: Final[Sequence[str]] = (
+__all__ = (
     "Audio",
     "CloseCode",
     "Opcode",

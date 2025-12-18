@@ -6,13 +6,13 @@ from hikariwave.connection import VoiceConnection
 from hikariwave.error import GatewayError
 from hikariwave.event.factory import EventFactory
 from hikariwave.event.types import WaveEventType
-from typing import Final, Sequence, TypeAlias
+from typing import TypeAlias
 
 import asyncio
 import hikari
 import logging
 
-__all__: Final[Sequence[str]] = ("VoiceClient",)
+__all__ = ("VoiceClient",)
 
 logger: logging.Logger = logging.getLogger("hikari-wave.client")
 
@@ -35,6 +35,11 @@ class VoiceChannelMeta:
 
 class VoiceClient:
     """Voice system implementation for `hikari`-based Discord bots."""
+
+    __slots__ = (
+        "_bot", "_connections", "_connectionsr", "_channels", "_members",
+        "_ssrcs", "_ssrcsr", "_states", "_event_factory", "_ffmpeg",
+    )
 
     def __init__(
         self,

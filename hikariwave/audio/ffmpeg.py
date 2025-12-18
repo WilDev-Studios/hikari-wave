@@ -6,10 +6,14 @@ from hikariwave.constants import Audio
 import asyncio
 import logging
 
+__all__ = ("FFmpeg",)
+
 logger: logging.Logger = logging.getLogger("hikariwave.ffmpeg")
 
 class FFmpeg:
     """Handles both decoding audio to PCM and encoding to Opus using FFmpeg."""
+
+    __slots__ = ("_process", "_queue",)
 
     def __init__(self) -> None:
         """

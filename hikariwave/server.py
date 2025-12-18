@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from hikariwave.error import ServerError
 from hikariwave.event.types import WaveEventType
-from typing import Callable, Final, Sequence, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from hikariwave.client import VoiceClient, VoiceChannelMeta
@@ -12,7 +12,7 @@ import hikari
 import logging
 import struct
 
-__all__: Final[Sequence[str]] = ("VoiceServer",)
+__all__ = ("VoiceServer",)
 
 logger: logging.Logger = logging.getLogger("hikari-wave.server")
 
@@ -82,6 +82,10 @@ class Protocol(asyncio.DatagramProtocol):
 
 class VoiceServer:
     """The background server responsible for communicating with Discord's voice servers."""
+
+    __slots__ = (
+        "_client", "_ip", "_port", "_ssrc", "_udp", "_last_audio", "_watch_task",
+    )
 
     def __init__(
         self,

@@ -21,10 +21,19 @@ import time
 if TYPE_CHECKING:
     from hikariwave.connection import VoiceConnection
 
+__all__ = ("AudioPlayer",)
+
 logger: logging.Logger = logging.getLogger("hikariwave.player")
 
 class AudioPlayer:
     """Responsible for all audio."""
+
+    __slots__ = (
+        "_connection", "_ended", "_skip", "_resumed",
+        "_sequence", "_timestamp", "_nonce",
+        "_queue", "_history", "_direct_source", "_current",
+        "_player_task", "_lock", "_track_completed",
+    )
 
     def __init__(self, connection: VoiceConnection, max_history: int = 20) -> None:
         """

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Final, Sequence
-
-__all__: Final[Sequence[str]] = (
+__all__ = (
     "GatewayError",
     "ServerError",
 )
