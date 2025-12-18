@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from collections import deque
-from hikariwave.audio.source import AudioSource, FileAudioSource
+from hikariwave.audio.source import (
+    AudioSource,
+    BufferAudioSource,
+    FileAudioSource,
+    URLAudioSource,
+)
 from hikariwave.constants import Audio
 from hikariwave.event.types import WaveEventType
 from typing import TYPE_CHECKING
@@ -82,10 +87,15 @@ class AudioPlayer:
         try:
             await self._connection._gateway.set_speaking(True)
     
-            if isinstance(source, FileAudioSource):
+            if isinstance(source, BufferAudioSource):
+                await self._connection._client._ffmpeg.start(source._buffer)
+            elif isinstance(source, FileAudioSource):
                 await self._connection._client._ffmpeg.start(source._filepath)
+            elif isinstance(source, URLAudioSource):
+                await self._connection._client._ffmpeg.start(source._url)
             else:
-                await self._connection._client._ffmpeg.start(await source.read())
+                error: str = "Audio source must inherit from AudioSource"
+                raise ValueError(error)
             
             self._connection._client._event_factory.emit(
                 WaveEventType.AUDIO_BEGIN,
