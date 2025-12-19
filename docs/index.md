@@ -1,70 +1,95 @@
 # hikari-wave
 
-Voice module for `hikari`-based Discord bots
+A lightweight, native voice implementation for `hikari`-based Discord bots.
 
-## What is hikari-wave?
+- **Latest:** `0.0.1a4`
+- **Python:** `3.10+`
 
-`hikari-wave` is a standalone module for `hikari` (an asynchronous Discord API for building bots) that allows developers to easily manipulate voice-related systems and logic. Much like `discord.py`, `hikari-wave` implements a custom communication layer to communicate with Discord on the backend, while most other `hikari`-based bots use `Lavalink` as a backend, which requires a separate install.
+[![Python](https://img.shields.io/pypi/pyversions/hikari-wave?style=for-the-badge)](https://pypi.org/project/hikari-wave/)
+[![PyPI](https://img.shields.io/pypi/v/hikari-wave?style=for-the-badge)](https://pypi.org/project/hikari-wave/)
+[![Downloads](https://img.shields.io/pypi/dd/hikari-wave?style=for-the-badge)](https://pypi.org/project/hikari-wave/)
+[![Documentation Status](https://readthedocs.org/projects/hikari-wave/badge/?version=latest&style=for-the-badge)](https://hikari-wave.readthedocs.io/en/latest/?badge=latest)
 
-## What are hikari-wave's features?
+## Overview
 
-- Doesn't require third-party installs besides [FFmpeg](https://ffmpeg.org/download.html).
-- Easy to use, asynchronous API
-- Heavily type-hinted and type-safe
-- Supplemental events for further development ease and QoL
+`hikari-wave` is a standalone voice module for [`hikari`](https://github.com/hikari-py.hikari) that provides **direct voice gateway communication** without requiring external backends like `Lavalink`.
 
-## How do I use hikari-wave?
+It is designed to be:
 
-- Install `hikari-wave` via `PyPI`: `pip install hikari-wave`
-- Import it into your program using `import hikariwave`
-- Verify [FFmpeg](https://ffmpeg.org/download.html) is installed and discoverable in your system's `PATH`.
+- **Simple to use**
+- **Fully asynchronous**
+- **Native to `hikari`'s architecture**
 
-## Documentation
+No separate servers. No complex setup. Just voice.
 
-[You can find our documentation here](https://hikari-wave.wildevstudios.net/).
+## Features
 
-## Getting Started
+- Native Discord voice gateway implementation
+- No third-party services required (`FFmpeg` only)
+- Clean, async-first API
+- Strong typing and documentation throughout
+- Supplemental voice events for better control and UX
 
-You need a basic `hikari` bot set up, like below:
+## Installation
+
+```bash
+pip install hikari-wave
+```
+
+Ensure [FFmpeg](https://ffmpeg.org/download.html) is installed and available in your system `PATH`.
+
+## Quick Start
+
+Create a basic voice client bot:
 
 ```python
 import hikari
 
-bot: hikari.GatewayBot = hikari.GatewayBot(TOKEN_HERE)
+bot = hikari.GatewayBot("TOKEN")
+client = hikariwave.VoiceClient(bot)
+
 bot.run()
 ```
 
-This won't do anything besides sit and look pretty. The following will make the bot connect/disconnect if a user joins/leaves a voice channel:
+Connect to voice when a member joins:
 
 ```python
-# imports and bot/client definition
-
 @bot.listen(hikariwave.MemberJoinVoiceEvent)
-async def member_joined_voice(event: hikariwave.MemberJoinVoiceEvent) -> None:
+async def on_join(event):
     await voice.connect(event.guild_id, event.channel_id)
-
-@bot.listen(hikariwave.MemberLeaveVoiceEvent)
-async def member_left_voice(event: hikariwave.MemberLeaveVoiceEvent) -> None:
-    await voice.disconnect(guild_id=event.guild_id)
-    # OR - can work for either guild or channel, for convenience
-    await voice.disconnect(channel_id=event.channel_id)
-
-bot.run()
 ```
 
-To make this play audio, get the connection and then play a file source:
+Play audio:
 
 ```python
 @bot.listen(hikariwave.MemberJoinVoiceEvent)
-async def member_joined_voice(event: hikariwave.MemberJoinVoiceEvent) -> None:
-    connection: hikariwave.VoiceConnection = await voice.connect(event.guild_id, event.channel_id)
-    source: FileAudioSource = FileAudioSource("test.mp3")
+async def on_join(event):
+    connection = await voice.connect(event.guild_id, event.channel_id)
+    source = FileAudioSource("test.mp3")
 
     await connection.play(source)
 ```
 
-Super easy and convenient!
+That's it.
+
+## Status
+
+- [X] Voice connect / disconnect
+- [X] Audio playback
+- [X] Move, reconnect, resume
+- [X] Player utilities (queue, shuffle, next/previous)
+- Audio Sources:
+    - [X] Files
+    - [X] URLs
+    - [X] In-memory buffers
+    - [ ] Media sites (YouTube, SoundCloud, etc.) (planned)
+- [ ] Discord `DAVE` (planned)
+
+## Contributing
+
+Bug reports and feature requests are welcome via GitHub Issues.
+Clear reproduction steps and context are appreciated.
 
 ## License
 
-This project is licensed under the [MIT License](https://github.com/WilDev-Studios/hikari-wave/blob/main/LICENSE). Copyright &copy; 2025 WilDev Studios. All rights reserved.
+MIT License &copy; 2025 WilDev Studios
