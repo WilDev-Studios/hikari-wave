@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hikariwave.constants import CloseCode, DAVE_VERSION, Opcode
+from hikariwave.constants import CloseCode, Constants, Opcode
 from hikariwave.error import GatewayError
 from hikariwave.event.types import WaveEventType
 from typing import Any, Callable, Coroutine, TYPE_CHECKING
@@ -144,8 +144,6 @@ class VoiceGateway:
             if opcode is None:
                 continue
 
-            logger.warning(f"Received opcode {opcode}: {Opcode(opcode).name}")
-
             data: bytes | dict[str, Any] = packet['d']
             self._sequence = packet.get("seq", self._sequence)
 
@@ -200,11 +198,11 @@ class VoiceGateway:
                 "user_id": str(self._bot_id),
                 "session_id": self._session_id,
                 "token": self._token,
-                "max_dave_protocol_version": DAVE_VERSION,
+                "max_dave_protocol_version": Constants.DAVE_VERSION,
             },
         })
         logger.debug(
-            f"Identified with gateway: Server={self._guild_id}, User={self._bot_id}, Session={self._session_id}, Token={self._token}, DAVE={DAVE_VERSION}"
+            f"Identified with gateway: Server={self._guild_id}, User={self._bot_id}, Session={self._session_id}, Token={self._token}, DAVE={Constants.DAVE_VERSION}"
         )
 
     async def _recv_packet(self) -> dict[str, Any]:
@@ -364,6 +362,7 @@ class VoiceGateway:
             Our desired encryption method to use for audio.
         """
         
+        logger.debug(F"Notifying Discord of our protocol: Address={ip}:{port}, Mode={mode}")
         await self._send_packet({
             "op": Opcode.SELECT_PROTOCOL,
             'd': {

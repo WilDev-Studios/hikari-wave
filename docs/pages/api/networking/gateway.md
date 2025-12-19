@@ -5,4 +5,4 @@ description: Voice Gateway
 
 ## Gateway
 
-::: hikariwave.gateway
+::: hikariwave.networking.gateway

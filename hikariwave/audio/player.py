@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 
 import asyncio
 import logging
-import nacl.secret as secret
 import random
 import struct
 import time
@@ -67,16 +66,6 @@ class AudioPlayer:
         self._lock: asyncio.Lock = asyncio.Lock()
 
         self._track_completed: bool = False
-
-    def _encrypt_aead_xchacha20_poly1305_rtpsize(self, header: bytes, audio: bytes) -> bytes:
-        box: secret.Aead = secret.Aead(self._connection._secret)
-
-        nonce: bytearray = bytearray(24)
-        nonce[:4] = struct.pack(">I", self._nonce)
-
-        self._nonce = (self._nonce + 1) % Audio.BIT_32U
-
-        return header + box.encrypt(audio, header, bytes(nonce)).ciphertext + nonce[:4]
 
     def _generate_rtp(self) -> bytes:
         header: bytearray = bytearray(12)
@@ -133,7 +122,7 @@ class AudioPlayer:
                     break
 
                 header: bytes = self._generate_rtp()
-                encrypted: bytes = getattr(self, f"_encrypt_{self._connection._mode}")(header, opus)
+                encrypted: bytes = self._connection._mode(self._connection._secret, self._nonce, header, opus)
                 await self._connection._server.send(encrypted)
 
                 self._sequence = (self._sequence + 1) % Audio.BIT_16U

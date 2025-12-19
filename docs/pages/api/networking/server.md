@@ -5,4 +5,4 @@ description: Voice Server
 
 ## Server
 
-::: hikariwave.server
+::: hikariwave.networking.server

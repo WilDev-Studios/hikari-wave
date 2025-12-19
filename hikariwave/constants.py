@@ -8,7 +8,7 @@ import struct
 __all__ = (
     "Audio",
     "CloseCode",
-    "DAVE_VERSION",
+    "Constants",
     "Opcode",
 )
 
@@ -28,7 +28,7 @@ class Audio:
     SAMPLE_SIZE: int = struct.calcsize('h') * CHANNELS
     """Size of frame sample."""
     SAMPLING_RATE: int = 48000
-    """Sampling rate/"""
+    """Sampling rate."""
     SAMPLES_PER_FRAME: int = int(SAMPLING_RATE / 1000 * FRAME_LENGTH)
     """Amount of samples per Opus frame."""
 
@@ -69,8 +69,11 @@ class CloseCode(IntEnum):
     DISCONNECTED_CALL_TERMINATED = 4022
     """Client was disconnected due to call being terminated. No reconnection."""
 
-DAVE_VERSION: int = 0
-"""The maximum supported `DAVE` version."""
+class Constants:
+    """Collection of miscellaneous constants."""
+
+    DAVE_VERSION: int = 0
+    """The maximum supported `DAVE` version."""
 
 class Opcode(IntEnum):
     """Collection of voice gateway operation codes."""

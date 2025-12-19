@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.audio.source import AudioSource
+from hikariwave.encrypt import Encrypt
 from hikariwave.event.types import WaveEventType
 from hikariwave.networking.gateway import Opcode, ReadyPayload, SessionDescriptionPayload, VoiceGateway
 from hikariwave.networking.server import VoiceServer
-from typing import TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 import asyncio
 import hikari
@@ -72,7 +73,7 @@ class VoiceConnection:
         self._ready: asyncio.Event = asyncio.Event()
 
         self._ssrc: int = None
-        self._mode: str = None
+        self._mode: Callable[[bytes, int, bytes, bytes], bytes] = None
         self._secret: bytes = None
 
         self._player: AudioPlayer = AudioPlayer(self)
@@ -88,10 +89,22 @@ class VoiceConnection:
     async def _gateway_ready(self, payload: ReadyPayload) -> None:
         self._ssrc = payload.ssrc
         
-        supported_mode: str = "aead_xchacha20_poly1305_rtpsize"
+        supported_modes: list[str] = payload.modes
+        chosen_mode: str = None
+        for mode in supported_modes:
+            if not hasattr(Encrypt, mode):
+                continue
+
+            chosen_mode = mode
+            break
+
+        if not chosen_mode:
+            error: str = "No supported encryption method was found/implemented"
+            raise RuntimeError(error)
+
         ip, port = await self._server.connect(payload.ip, payload.port, self._ssrc)
 
-        await self._gateway.select_protocol(ip, port, supported_mode)
+        await self._gateway.select_protocol(ip, port, chosen_mode)
 
     async def _gateway_reconnect(self) -> None:
         self._gateway = VoiceGateway(
@@ -111,7 +124,7 @@ class VoiceConnection:
         )
 
     async def _gateway_session_description(self, payload: SessionDescriptionPayload) -> None:
-        self._mode = payload.mode
+        self._mode = getattr(Encrypt, payload.mode)
         self._secret = payload.secret
         self._ready.set()
     

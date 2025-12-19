@@ -75,18 +75,21 @@ nav:
       - FFmpeg: pages/api/audio/ffmpeg.md
       - Player: pages/api/audio/player.md
       - Source: pages/api/audio/source.md
+    - Client: pages/api/client.md
+    - Connection: pages/api/connection.md
+    - Constants: pages/api/constants.md
+    - Encrypt: pages/api/encrypt.md
+    - Error: pages/api/error.md
     - Event:
       - Events: pages/api/event/events.md
       - Factory: pages/api/event/factory.md
       - Types: pages/api/event/types.md
-    - Client: pages/api/client.md
-    - Connection: pages/api/connection.md
-    - Constants: pages/api/constants.md
-    - Error: pages/api/error.md
-    - Gateway: pages/api/gateway.md
-    - Server: pages/api/server.md
+    - Networking:
+      - Gateway: pages/api/networking/gateway.md
+      - Server: pages/api/networking/server.md
   - Changelog:
     - Index: pages/changelog/index.md
+    - 0.0.1a4 (12-19-2025): pages/changelog/0.0.1a4.md
     - 0.0.1a3 (12-17-2025): pages/changelog/0.0.1a3.md
     - 0.0.1a2 (12-17-2025): pages/changelog/0.0.1a2.md
     - 0.0.1a1 (12-16-2025): pages/changelog/0.0.1a1.md
