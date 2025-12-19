@@ -14,7 +14,7 @@ import time
 import websockets
 
 if TYPE_CHECKING:
-    from .connection import VoiceConnection
+    from hikariwave.connection import VoiceConnection
 
 __all__ = ("VoiceGateway",)
 

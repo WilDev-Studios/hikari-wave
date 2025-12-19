@@ -3,8 +3,8 @@ from __future__ import annotations
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.audio.source import AudioSource
 from hikariwave.event.types import WaveEventType
-from hikariwave.gateway import Opcode, ReadyPayload, SessionDescriptionPayload, VoiceGateway
-from hikariwave.server import VoiceServer
+from hikariwave.networking.gateway import Opcode, ReadyPayload, SessionDescriptionPayload, VoiceGateway
+from hikariwave.networking.server import VoiceServer
 from typing import TYPE_CHECKING
 
 import asyncio

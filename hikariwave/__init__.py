@@ -6,9 +6,9 @@ An asynchronous, type-safe, easy-to-use voice system implementation for `hikari`
 **GitHub:** https://github.com/WilDev-Studios/hikari-wave
 """
 
-from .audio.player import AudioPlayer
-from .audio.source import *
-from .client import VoiceClient
-from .connection import VoiceConnection
-from .error import *
-from .event.events import *
+from hikariwave.audio.player import AudioPlayer
+from hikariwave.audio.source import *
+from hikariwave.client import VoiceClient
+from hikariwave.connection import VoiceConnection
+from hikariwave.error import *
+from hikariwave.event.events import *
