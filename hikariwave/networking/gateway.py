@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hikariwave.constants import CloseCode, Opcode
+from hikariwave.constants import CloseCode, DAVE_VERSION, Opcode
 from hikariwave.error import GatewayError
 from hikariwave.event.types import WaveEventType
 from typing import Any, Callable, Coroutine, TYPE_CHECKING
@@ -10,6 +10,7 @@ import asyncio
 import hikari
 import json
 import logging
+import struct
 import time
 import websockets
 
@@ -40,6 +41,8 @@ class ReadyPayload(Payload):
 class SessionDescriptionPayload(Payload):
     """SESSION_DESCRIPTION gateway payload."""
 
+    dave_protocol_version: int
+    """The initial `DAVE` protocol version to use."""
     mode: str
     """The encryption mode the player should use when sending audio."""
     secret: bytes
@@ -105,6 +108,9 @@ class VoiceGateway:
         self._last_heartbeat_ack: float = 0.0
 
     async def _call_callback(self, opcode: Opcode, payload: Payload) -> None:
+        if opcode not in self._callbacks:
+            return
+        
         await self._callbacks[opcode](payload)
 
     async def _heartbeat(self) -> None:
@@ -134,8 +140,13 @@ class VoiceGateway:
         while True:
             packet: dict[str, Any] = await self._recv_packet()
             opcode: int = packet.get("op")
-            data: dict[str, Any] = packet.get('d', {})
+            
+            if opcode is None:
+                continue
 
+            logger.warning(f"Received opcode {opcode}: {Opcode(opcode).name}")
+
+            data: bytes | dict[str, Any] = packet['d']
             self._sequence = packet.get("seq", self._sequence)
 
             match opcode:
@@ -146,7 +157,7 @@ class VoiceGateway:
                     ))
                 case Opcode.SESSION_DESCRIPTION:
                     await self._call_callback(Opcode.SESSION_DESCRIPTION, SessionDescriptionPayload(
-                        data["mode"], bytes(data["secret_key"]),
+                        data["dave_protocol_version"], data["mode"], bytes(data["secret_key"]),
                     ))
                 case Opcode.SPEAKING:
                     user_id: int = int(data["user_id"])
@@ -169,6 +180,13 @@ class VoiceGateway:
                 case Opcode.UNDOCUMENTED_15:...
                 case Opcode.UNDOCUMENTED_18:...
                 case Opcode.UNDOCUMENTED_20:...
+                case Opcode.DAVE_PREPARE_TRANSITION:...
+                case Opcode.DAVE_EXECUTE_TRANSITION:...
+                case Opcode.DAVE_PREPARE_EPOCH:...
+                case Opcode.DAVE_MLS_EXTERNAL_SENDER:...
+                case Opcode.DAVE_MLS_PROPOSALS:...
+                case Opcode.DAVE_MLS_ANNOUNCE_COMMIT_TRANSITION:...
+                case Opcode.DAVE_MLS_WELCOME:...
                 case None: return
                 case _:
                     logger.warning(f"Unhandled opcode {opcode}! Please alert hikari-wave's developers ASAP")
@@ -182,20 +200,42 @@ class VoiceGateway:
                 "user_id": str(self._bot_id),
                 "session_id": self._session_id,
                 "token": self._token,
+                "max_dave_protocol_version": DAVE_VERSION,
             },
         })
         logger.debug(
-            f"Identified with gateway: Server={self._guild_id}, User={self._bot_id}, Session={self._session_id}, Token={self._token}"
+            f"Identified with gateway: Server={self._guild_id}, User={self._bot_id}, Session={self._session_id}, Token={self._token}, DAVE={DAVE_VERSION}"
         )
 
     async def _recv_packet(self) -> dict[str, Any]:
         try:
-            packet: dict[str, Any] = json.loads(await self._websocket.recv())
-            return packet
-        except json.JSONDecodeError as e:
-            await self.disconnect()
+            payload: bytes | str = await self._websocket.recv()
 
-            error: str = f"Couldn't decode websocket packet: {e}"
+            if isinstance(payload, (bytes, bytearray)):
+                if not payload:
+                    error: str = "Received empty bytes packet"
+                    raise GatewayError(error)
+            
+                seq: int = struct.unpack(">H", payload[0:2])[0]
+                opcode: int = payload[2]
+                data: bytes = payload[3:]
+                
+                return {
+                    "op": opcode,
+                    'd': data,
+                    "seq": seq,
+                }
+            
+            if isinstance(payload, str):
+                try:
+                    return json.loads(payload)
+                except json.JSONDecodeError as e:
+                    await self.disconnect()
+
+                    error: str = f"Couldn't decode websocket packet: {e}"
+                    raise GatewayError(error)
+            
+            error: str = f"Unknown packet type: {type(payload)}"
             raise GatewayError(error)
         except websockets.ConnectionClosed as e:
             await self.disconnect()
@@ -222,8 +262,13 @@ class VoiceGateway:
             }
         })
 
-    async def _send_packet(self, data: dict[str, Any]) -> None:
+    async def _send_packet(self, data: dict[str, Any] | tuple[int, bytes]) -> None:
         try:
+            if isinstance(data, tuple):
+                packet: bytes = bytes([data[0]]) + data[1]
+                await self._websocket.send(packet)
+                return
+            
             await self._websocket.send(json.dumps(data))
         finally:
             return

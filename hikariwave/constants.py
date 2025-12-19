@@ -8,6 +8,7 @@ import struct
 __all__ = (
     "Audio",
     "CloseCode",
+    "DAVE_VERSION",
     "Opcode",
 )
 
@@ -68,36 +69,61 @@ class CloseCode(IntEnum):
     DISCONNECTED_CALL_TERMINATED = 4022
     """Client was disconnected due to call being terminated. No reconnection."""
 
+DAVE_VERSION: int = 0
+"""The maximum supported `DAVE` version."""
+
 class Opcode(IntEnum):
     """Collection of voice gateway operation codes."""
 
     IDENTIFY = 0
-    """`CLIENT` - Begin a voice websocket connection."""
+    """`CLIENT/JSON` - Begin a voice websocket connection."""
     SELECT_PROTOCOL = 1
-    """`CLIENT` - Select the voice protocol."""
+    """`CLIENT/JSON` - Select the voice protocol."""
     READY = 2
-    """`SERVER` - Complete the websocket handshake."""
+    """`SERVER/JSON` - Complete the websocket handshake."""
     HEARTBEAT = 3
-    """`CLIENT` - Keep the websocket connection alive."""
+    """`CLIENT/JSON` - Keep the websocket connection alive."""
     SESSION_DESCRIPTION = 4
-    """`SERVER` - Describe the session."""
+    """`SERVER/JSON` - Describe the session."""
     SPEAKING = 5
-    """`CLIENT/SERVER` - Indicate which users are speaking."""
+    """`CLIENT:SERVER/JSON` - Indicate which users are speaking."""
     HEARTBEAT_ACK = 6
-    """`SERVER` - Sent to acknowledge a received client heartbeat."""
+    """`SERVER/JSON` - Sent to acknowledge a received client heartbeat."""
     RESUME = 7
-    """`CLIENT` - Resume a connection."""
+    """`CLIENT/JSON` - Resume a connection."""
     HELLO = 8
-    """`SERVER` - Time to wait between sending heartbeats in milliseconds."""
+    """`SERVER/JSON` - Time to wait between sending heartbeats in milliseconds."""
     RESUMED = 9
-    """`SERVER` - Acknowledge a successful session resume."""
+    """`SERVER/JSON` - Acknowledge a successful session resume."""
     CLIENTS_CONNECT = 11
-    """`SERVER` - One or more clients have connection to the voice channel."""
+    """`SERVER/JSON` - One or more clients have connection to the voice channel."""
     CLIENT_DISCONNECT = 13
-    """`SERVER` - A client has disconnected from the voice channel."""
+    """`SERVER/JSON` - A client has disconnected from the voice channel."""
     UNDOCUMENTED_15 = 15
-    """`SERVER` - Unknown as of `0.0.1a1`."""
+    """`SERVER/JSON` - Unknown as of `0.0.1a1`."""
     UNDOCUMENTED_18 = 18
-    """`SERVER` - Unknown as of `0.0.1a1` - Contains user flags of user who joined channel."""
+    """`SERVER/JSON` - Unknown as of `0.0.1a1` - Contains user flags of user who joined channel."""
     UNDOCUMENTED_20 = 20
-    """`SERVER` - Unknown as of `0.0.1a1` - Contains user platform of user who joined channel."""
+    """`SERVER/JSON` - Unknown as of `0.0.1a1` - Contains user platform of user who joined channel."""
+    DAVE_PREPARE_TRANSITION = 21
+    """`SERVER/JSON` - A downgrade from the DAVE protocol is upcoming."""
+    DAVE_EXECUTE_TRANSITION = 22
+    """`SERVER/JSON` - Execute a previously announced protocol transition."""
+    DAVE_TRANSITION_READY = 23
+    """`CLIENT/JSON` - Acknowledge readiness previously announced transition."""
+    DAVE_PREPARE_EPOCH = 24
+    """`SERVER/JSON` - A DAVE protocol version or group change is upcoming."""
+    DAVE_MLS_EXTERNAL_SENDER = 25
+    """`SERVER/BYTE` - Credential and public key for MLS external sender."""
+    DAVE_MLS_KEY_PACKAGE = 26
+    """`CLIENT/BYTE` - MLS Key Package for pending group member."""
+    DAVE_MLS_PROPOSALS = 27
+    """`SERVER/BYTE` - MLS Proposals to be appended or revoked."""
+    DAVE_MLS_COMMIT_WELCOME = 28
+    """`CLIENT/BYTE` - MLS Commit with optional MLS welcome messages."""
+    DAVE_MLS_ANNOUNCE_COMMIT_TRANSITION = 29
+    """`SERVER/BYTE` - MLS Commit to be processed for upcoming transition."""
+    DAVE_MLS_WELCOME = 30
+    """`SERVER/BYTE` - MLS Welcome to group for upcoming transition."""
+    DAVE_MLS_INVALID_COMMIT_WELCOME = 31
+    """`CLIENT/JSON` - Flag invalid commit or welcome, request re-add."""
