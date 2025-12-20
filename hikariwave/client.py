@@ -58,9 +58,9 @@ class VoiceClient:
         bot : hikari.GatewayBot
             The `hikari`-based Discord bot to link this voice system with.
         bitrate : str
-            The audio output bitrate - Default `Audio.BITRATE`.
+            The audio output bitrate.
         channels : int
-            The amount of audio channels - Default `Audio.CHANNELS`.
+            The amount of audio channels.
         
         Raises
         ------
@@ -324,9 +324,9 @@ class VoiceClient:
         channel_id : hikari.Snowflakeish
             The ID of the channel to connect to.
         mute : bool 
-            If the bot should be muted upon joining the channel - Default `False`.
+            If the bot should be muted upon joining the channel.
         deaf : bool
-            If the bot should be deafened upon joining the channel - Default `True`.
+            If the bot should be deafened upon joining the channel.
         
         Returns
         -------
@@ -377,9 +377,9 @@ class VoiceClient:
         Parameters
         ----------
         guild_id : hikari.Snowflakeish | None
-            The ID of the guild that the channel to disconnect from is in - Default `None`.
+            The ID of the guild that the channel to disconnect from is in.
         channel_id : hikari.Snowflakeish | None
-            The ID of the channel to disconnect from - Default `None`.
+            The ID of the channel to disconnect from.
         
         Note
         ----
@@ -423,9 +423,9 @@ class VoiceClient:
         Parameters
         ----------
         guild_id : hikari.Snowflakeish | None
-            The ID of the guild that the connection is handling - Default `None`.
+            The ID of the guild that the connection is handling.
         channel_id : hikari.Snowflakeish | None
-            The ID of the channel that the connection is handling - Default `None`.
+            The ID of the channel that the connection is handling.
         
         Note
         ----
@@ -481,13 +481,13 @@ class VoiceClient:
         channel_id : hikari.Snowflakeish
             The ID of the channel to move to.
         guild_id : hikari.Snowflakeish | None
-            The ID of the guild you're currently in - Default `None`.
+            The ID of the guild you're currently in.
         old_channel_id : hikari.Snowflakeish | None
-            The ID of the channel you're currently in - Default `None`.
+            The ID of the channel you're currently in.
         mute : bool 
-            If the bot should be muted upon moving channels - Default `False`.
+            If the bot should be muted upon moving channels.
         deaf : bool
-            If the bot should be deafened upon moving channels - Default `True`.
+            If the bot should be deafened upon moving channels.
         
         Note
         ----

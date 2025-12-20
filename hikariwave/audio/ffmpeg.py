@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 from hikariwave.internal.constants import Audio
+from hikariwave.audio.source import (
+    AudioSource,
+    BufferAudioSource,
+    FileAudioSource,
+    URLAudioSource,
+)
 from typing import TypeAlias, TYPE_CHECKING
 
 import asyncio
@@ -35,24 +41,38 @@ class FFmpegWorker:
         self._process: asyncio.subprocess.Process = None
         self._client: VoiceClient = client
 
-    async def encode(self, source: Source, output: asyncio.Queue[bytes | None]) -> None:
+    async def encode(self, source: AudioSource, output: asyncio.Queue[bytes | None]) -> None:
         """
         Encode an entire audio source and stream each Opus frame into the output.
         
         Parameters
         ----------
-        source : bytearray | bytes | memoryview | str
-            The audio source contents to encode.
+        source : AudioSource
+            The audio source to read and encode.
         output : asyncio.Queue[bytes | None]
             The output buffer to write each Opus frame into.
         """
-        
-        pipeable: bool = isinstance(source, (bytearray, bytes, memoryview))
+
+        pipeable: bool = False
+
+        if isinstance(source, BufferAudioSource):
+            content: bytearray | bytes | memoryview = source._buffer
+            pipeable = True
+        elif isinstance(source, FileAudioSource):
+            content: str = source._filepath
+        elif isinstance(source, URLAudioSource):
+            content: str = source._url
+        else:
+            error: str = f"Provided audio source doesn't inherit AudioSource"
+            raise TypeError(error)
+
+        volume: float | str = source._volume or 1.0
 
         args: list[str] = [
             "ffmpeg",
-            "-i", "pipe:0" if pipeable else source,
+            "-i", "pipe:0" if pipeable else content,
             "-map", "0:a",
+            "-af", f"volume={volume}",
             "-acodec", "libopus",
             "-f", "opus",
             "-ar", str(Audio.SAMPLING_RATE),
@@ -73,7 +93,7 @@ class FFmpegWorker:
 
         if pipeable:
             try:
-                self._process.stdin.write(source)
+                self._process.stdin.write(content)
                 await self._process.stdin.drain()
                 self._process.stdin.close()
                 await self._process.stdin.wait_closed()
@@ -168,14 +188,14 @@ class FFmpegPool:
         self._available: asyncio.Queue[FFmpegWorker] = asyncio.Queue()
         self._unavailable: set[FFmpegWorker] = set()
     
-    async def submit(self, source: Source, output: asyncio.Queue[bytes | None]) -> None:
+    async def submit(self, source: AudioSource, output: asyncio.Queue[bytes | None]) -> None:
         """
-        Submit and schedule audio source content to be encoded into Opus and stream output into a buffer.
+        Submit and schedule an audio source to be encoded into Opus and stream output into a buffer.
         
         Parameters
         ----------
-        source : bytearray | bytes | memoryview | str
-            The audio source content to encode.
+        source : AudioSource
+            The audio source to read and encode.
         output : asyncio.Queue[bytes | None]
             The buffer to stream Opus frames into.
         """
