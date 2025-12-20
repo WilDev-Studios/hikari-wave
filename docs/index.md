@@ -2,7 +2,7 @@
 
 A lightweight, native voice implementation for `hikari`-based Discord bots.
 
-- **Latest:** `0.0.1a4`
+- **Latest:** `0.0.1a5`
 - **Python:** `3.10+`
 
 [![Python](https://img.shields.io/pypi/pyversions/hikari-wave?style=for-the-badge)](https://pypi.org/project/hikari-wave/)
