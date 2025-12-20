@@ -180,6 +180,7 @@ class FFmpegPool:
         """
         
         self._client: VoiceClient = client
+        self._enabled: bool = True
 
         self._max: int = min(max_global, os.cpu_count() * max_per_core)
         self._total: int = 0
@@ -200,6 +201,8 @@ class FFmpegPool:
             The buffer to stream Opus frames into.
         """
         
+        if not self._enabled: return
+
         if self._available.empty() and self._total < self._max:
             worker: FFmpegWorker = FFmpegWorker(self._client)
             self._total += 1
@@ -220,3 +223,18 @@ class FFmpegPool:
                     await self._available.put(worker)
 
         asyncio.create_task(_run())
+    
+    async def stop(self) -> None:
+        """
+        Stop future scheduling and terminate every worker process.
+        """
+
+        self._enabled = False
+
+        await asyncio.gather(
+            *(unavailable.stop() for unavailable in self._unavailable)
+        )
+        self._available = asyncio.Queue()
+        self._unavailable.clear()
+
+        self._total = 0

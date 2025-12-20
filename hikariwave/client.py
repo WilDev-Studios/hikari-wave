@@ -306,6 +306,30 @@ class VoiceClient:
         """The controlling OAuth2 bot."""
         return self._bot
 
+    async def close(self) -> None:
+        """
+        Shut down every connection and clean up.
+        """
+
+        self._bot.unsubscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
+        self._bot.unsubscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
+
+        await asyncio.gather(
+            *(self._disconnect(guild_id) for guild_id in self._connections.keys())
+        )
+
+        if self._connections: self._connections.clear()
+        if self._connectionsr: self._connectionsr.clear()
+
+        if self._channels: self._channels.clear()
+        if self._members: self._members.clear()
+        if self._ssrcs: self._ssrcs.clear()
+        if self._ssrcsr: self._ssrcsr.clear()
+
+        if self._states: self._states.clear()
+
+        await self._ffmpeg.stop()
+
     async def connect(
         self,
         guild_id: hikari.Snowflakeish,
@@ -535,5 +559,4 @@ class VoiceClient:
         
         if old_channel_id:
             guild_id = self._connectionsr[old_channel_id]
-
         return await self._connect(guild_id, channel_id, mute, deaf, True)
