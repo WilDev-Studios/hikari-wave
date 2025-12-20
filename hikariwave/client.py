@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hikariwave.audio.ffmpeg import FFmpegPool
 from hikariwave.connection import VoiceConnection
 from hikariwave.event.factory import EventFactory
 from hikariwave.event.types import WaveEventType
+from hikariwave.internal.constants import Audio
 from hikariwave.internal.error import GatewayError
 from typing import TypeAlias
 
@@ -36,13 +38,17 @@ class VoiceClient:
     """Voice system implementation for `hikari`-based Discord bots."""
 
     __slots__ = (
-        "_bot", "_connections", "_connectionsr", "_channels", "_members",
-        "_ssrcs", "_ssrcsr", "_states", "_event_factory",
+        "_bot", "_audio_bitrate", "_audio_channels", "_audio_frame_length",
+        "_connections", "_connectionsr", "_channels", "_members",
+        "_ssrcs", "_ssrcsr", "_states", "_event_factory", "_ffmpeg",
     )
 
     def __init__(
         self,
         bot: hikari.GatewayBot,
+        *,
+        bitrate: str = Audio.BITRATE,
+        channels: int = Audio.CHANNELS,
     ) -> None:
         """
         Create a new voice client.
@@ -51,6 +57,10 @@ class VoiceClient:
         ----------
         bot : hikari.GatewayBot
             The `hikari`-based Discord bot to link this voice system with.
+        bitrate : str
+            The audio output bitrate - Default `Audio.BITRATE`.
+        channels : int
+            The amount of audio channels - Default `Audio.CHANNELS`.
         
         Raises
         ------
@@ -66,6 +76,9 @@ class VoiceClient:
         self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
         self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
 
+        self._audio_bitrate: str = bitrate
+        self._audio_channels: int = channels
+
         self._connections: dict[GuildID, VoiceConnection] = {}
         self._connectionsr: dict[ChannelID, GuildID] = {}
 
@@ -77,6 +90,7 @@ class VoiceClient:
         self._states: dict[MemberID, tuple[bool, bool]] = {}
 
         self._event_factory: EventFactory = EventFactory(self._bot)
+        self._ffmpeg: FFmpegPool = FFmpegPool(self)
     
     async def _connect(self, guild_id: hikari.Snowflake, channel_id: hikari.Snowflake, mute: bool, deaf: bool, disconnect: bool = False) -> VoiceConnection:
         try:

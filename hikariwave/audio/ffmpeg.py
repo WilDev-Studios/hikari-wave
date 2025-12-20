@@ -1,88 +1,63 @@
 from __future__ import annotations
 
-from collections import deque
 from hikariwave.internal.constants import Audio
+from typing import TypeAlias, TYPE_CHECKING
 
 import asyncio
 import logging
+import os
+import time
 
-__all__ = ("FFmpeg",)
+if TYPE_CHECKING:
+    from hikariwave.client import VoiceClient
 
-logger: logging.Logger = logging.getLogger("hikariwave.ffmpeg")
+Source: TypeAlias = bytearray | bytes | memoryview | str
 
-class FFmpeg:
-    """Handles both decoding audio to PCM and encoding to Opus using FFmpeg."""
+logger: logging.Logger = logging.getLogger("hikari-wave.ffmpeg")
 
-    __slots__ = ("_process", "_queue",)
+__all__ = ("FFmpegPool", "FFmpegWorker",)
 
-    def __init__(self) -> None:
+class FFmpegWorker:
+    """Manages a single FFmpeg process when requested."""
+
+    __slots__ = ("_process", "_client",)
+
+    def __init__(self, client: VoiceClient) -> None:
         """
-        Create a new FFmpeg audio handler.
+        Create a new worker.
+
+        Parameters
+        ----------
+        client : VoiceClient
+            The voice system client application.
         """
-        
+
         self._process: asyncio.subprocess.Process = None
-        self._queue: deque[bytes] = deque()
-    
-    async def read(self) -> bytes | None:
+        self._client: VoiceClient = client
+
+    async def encode(self, source: Source, output: asyncio.Queue[bytes | None]) -> None:
         """
-        Read the next Opus packet from the FFmpeg audio stream.
+        Encode an entire audio source and stream each Opus frame into the output.
         
-        Returns
-        -------
-        bytes | None
-            The Opus packet, if present.
-        """
-
-        if self._queue:
-            return self._queue.popleft()
-
-        if not self._process or not self._process.stdout or self._process.stdout.at_eof():
-            return None
-        
-        try:
-            header: bytes = await self._process.stdout.readexactly(27)
-            if not header.startswith(b"OggS"):
-                return None
-            
-            segments_count: int = header[26]
-            segment_table: bytes = await self._process.stdout.readexactly(segments_count)
-    
-            current_packet: bytearray = bytearray()
-            for lacing_value in segment_table:
-                data: bytes = await self._process.stdout.readexactly(lacing_value)
-                current_packet.extend(data)
-
-                if lacing_value < 255:
-                    packet_bytes: bytes = bytes(current_packet)
-
-                    if not (
-                        packet_bytes.startswith(b"OpusHead") or
-                        packet_bytes.startswith(b"OpusTags")
-                    ):
-                        self._queue.append(packet_bytes)
-                    
-                    current_packet.clear()
-            
-            return self._queue.popleft() if self._queue else await self.read()
-        except asyncio.IncompleteReadError | AttributeError | IndexError:
-            return None
-
-    async def start(self, raw: bytes | str) -> None:
-        """
-        Start the (en/de)coding process of an input.
+        Parameters
+        ----------
+        source : bytearray | bytes | memoryview | str
+            The audio source contents to encode.
+        output : asyncio.Queue[bytes | None]
+            The output buffer to write each Opus frame into.
         """
         
-        await self.stop()
-        
+        pipeable: bool = isinstance(source, (bytearray, bytes, memoryview))
+
         args: list[str] = [
             "ffmpeg",
-            "-i", "pipe:0" if isinstance(raw, bytes) else raw,
+            "-i", "pipe:0" if pipeable else source,
             "-map", "0:a",
             "-acodec", "libopus",
             "-f", "opus",
             "-ar", str(Audio.SAMPLING_RATE),
-            "-ac", str(Audio.CHANNELS),
-            "-b:a", "96k",
+            "-ac", str(self._client._audio_channels),
+            "-b:a", self._client._audio_bitrate,
             "-application", "audio",
             "-frame_duration", str(Audio.FRAME_LENGTH),
             "-loglevel", "warning",
@@ -91,25 +66,58 @@ class FFmpeg:
 
         self._process = await asyncio.create_subprocess_exec(
             *args,
-            stdin=asyncio.subprocess.PIPE if isinstance(raw, bytes) else None,
+            stdin=asyncio.subprocess.PIPE if pipeable else None,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
 
-        if isinstance(raw, bytes):
+        if pipeable:
             try:
-                self._process.stdin.write(raw)
+                self._process.stdin.write(source)
                 await self._process.stdin.drain()
                 self._process.stdin.close()
                 await self._process.stdin.wait_closed()
-            except:
-                pass
+            except Exception as e:
+                logger.error(f"FFmpeg encode error: {e}")
+        
+        start: float = time.perf_counter()
+        while True:
+            try:
+                header: bytes = await self._process.stdout.readexactly(27)
+                if not header.startswith(b"OggS"):
+                    return None
+                
+                segments_count: int = header[26]
+                segment_table: bytes = await self._process.stdout.readexactly(segments_count)
+
+                current_packet: bytearray = bytearray()
+                for lacing_value in segment_table:
+                    data: bytes = await self._process.stdout.readexactly(lacing_value)
+                    current_packet.extend(data)
+
+                    if lacing_value < 255:
+                        packet_bytes: bytes = bytes(current_packet)
+
+                        if not (
+                            packet_bytes.startswith(b"OpusHead") or
+                            packet_bytes.startswith(b"OpusTags")
+                        ):
+                            await output.put(packet_bytes)
+                        
+                        current_packet.clear()
+            except asyncio.IncompleteReadError:
+                break
+        
+        logger.debug(f"FFmpeg finished in {(time.perf_counter() - start) * 1000:.2f}ms")
+
+        await output.put(None)
+        await self.stop()
     
     async def stop(self) -> None:
         """
-        Terminate the FFmpeg process.
+        Stop the internal process.
         """
-
+        
         if not self._process:
             return
         
@@ -128,4 +136,67 @@ class FFmpeg:
                 pass
 
         self._process = None
-        self._queue.clear()
+
+class FFmpegPool:
+    """Manages all FFmpeg processes and deploys them when needed."""
+
+    __slots__ = (
+        "_client", "_max", "_total", "_min",
+        "_available", "_unavailable",
+    )
+
+    def __init__(self, client: VoiceClient, max_per_core: int = 2, max_global: int = 16) -> None:
+        """
+        Create a FFmpeg process pool.
+        
+        Parameters
+        ----------
+        client : VoiceClient
+            The voice system client application.
+        max_per_core : int
+            The maximum amount of processes that can be spawned per logical CPU core.
+        max_global : int
+            The maximum, hard-cap amount of processes that can be spawned.
+        """
+        
+        self._client: VoiceClient = client
+
+        self._max: int = min(max_global, os.cpu_count() * max_per_core)
+        self._total: int = 0
+        self._min: int = 0
+
+        self._available: asyncio.Queue[FFmpegWorker] = asyncio.Queue()
+        self._unavailable: set[FFmpegWorker] = set()
+    
+    async def submit(self, source: Source, output: asyncio.Queue[bytes | None]) -> None:
+        """
+        Submit and schedule audio source content to be encoded into Opus and stream output into a buffer.
+        
+        Parameters
+        ----------
+        source : bytearray | bytes | memoryview | str
+            The audio source content to encode.
+        output : asyncio.Queue[bytes | None]
+            The buffer to stream Opus frames into.
+        """
+        
+        if self._available.empty() and self._total < self._max:
+            worker: FFmpegWorker = FFmpegWorker(self._client)
+            self._total += 1
+        else:
+            worker: FFmpegWorker = await self._available.get()
+
+        self._unavailable.add(worker)
+
+        async def _run() -> None:
+            try:
+                await worker.encode(source, output)
+            finally:
+                self._unavailable.remove(worker)
+
+                if self._total > self._min:
+                    self._total -= 1
+                else:
+                    await self._available.put(worker)
+
+        asyncio.create_task(_run())

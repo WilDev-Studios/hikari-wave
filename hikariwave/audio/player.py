@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import deque
-from hikariwave.audio.ffmpeg import FFmpeg
 from hikariwave.audio.source import (
     AudioSource,
     BufferAudioSource,
@@ -30,7 +29,7 @@ class AudioPlayer:
     """Responsible for all audio."""
 
     __slots__ = (
-        "_connection", "_ffmpeg", "_ended", "_skip", "_resumed",
+        "_connection", "_buffer", "_ended", "_skip", "_resumed",
         "_sequence", "_timestamp", "_nonce",
         "_queue", "_history", "_priority_source", "_current",
         "_player_task", "_lock", "_track_completed",
@@ -49,7 +48,7 @@ class AudioPlayer:
         """
         
         self._connection: VoiceConnection = connection
-        self._ffmpeg: FFmpeg = FFmpeg()
+        self._buffer: asyncio.Queue[bytes | None] = asyncio.Queue()
 
         self._ended: asyncio.Event = asyncio.Event()
         self._skip: asyncio.Event = asyncio.Event()
@@ -81,6 +80,7 @@ class AudioPlayer:
         return bytes(header)
 
     async def _play_internal(self, source: AudioSource) -> bool:
+        self._buffer = asyncio.Queue()
         self._ended.clear()
         self._skip.clear()
         self._track_completed = False
@@ -88,11 +88,11 @@ class AudioPlayer:
         await self._connection._gateway.set_speaking(True)
 
         if isinstance(source, BufferAudioSource):
-            await self._ffmpeg.start(source._buffer)
+            await self._connection._client._ffmpeg.submit(source._buffer, self._buffer)
         elif isinstance(source, FileAudioSource):
-            await self._ffmpeg.start(source._filepath)
+            await self._connection._client._ffmpeg.submit(source._filepath, self._buffer)
         elif isinstance(source, URLAudioSource):
-            await self._ffmpeg.start(source._url)
+            await self._connection._client._ffmpeg.submit(source._url, self._buffer)
         else:
             error: str = "Audio source must inherit from AudioSource"
             raise ValueError(error)
@@ -117,7 +117,7 @@ class AudioPlayer:
                 start_time = time.perf_counter()
                 continue
 
-            opus: bytes = await self._ffmpeg.read()
+            opus: bytes = await self._buffer.get()
             if not opus:
                 self._track_completed = True
                 break
@@ -143,7 +143,6 @@ class AudioPlayer:
 
         await self._send_silence()
         await self._connection._gateway.set_speaking(False)
-        await self._ffmpeg.stop()
 
         return self._track_completed
 
