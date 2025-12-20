@@ -19,7 +19,7 @@ It is designed to be:
 - **Fully asynchronous**
 - **Native to `hikari`'s architecture**
 
-No separate servers. No complex setup. Just voice.
+No separate software. No complex setup. Just voice.
 
 ## Features
 
