@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from hikariwave.constants import Audio
+from hikariwave.internal.constants import Audio
 
 import nacl.secret as secret
 import struct
@@ -10,6 +10,9 @@ __all__ = ("Encrypt",)
 
 class Encrypt:
     """Container class for all supported, non-deprecated encryption modes."""
+
+    SUPPORTED: tuple[str, ...] = ("aead_aes256_gcm_rtpsize", "aead_xchacha20_poly1305_rtpsize",)
+    """A list of all currently supported, non-deprecated, complete, and tested encryption modes."""
 
     @staticmethod
     def aead_aes256_gcm_rtpsize(secret_key: bytes, nonce: int, header: bytes, audio: bytes) -> bytes:
@@ -37,7 +40,7 @@ class Encrypt:
 
         packet_nonce: bytes = struct.pack(">I", nonce) + b"\x00" * 8
         nonce = (nonce + 1) % Audio.BIT_32U
-
+        
         encrypted: bytes = aesgcm.encrypt(packet_nonce, audio, header)
 
         return header + encrypted + packet_nonce[8:]

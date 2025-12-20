@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from hikariwave.error import ServerError
 from hikariwave.event.types import WaveEventType
+from hikariwave.internal.error import ServerError
 from typing import Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -219,6 +219,9 @@ class VoiceServer:
             Our public, discovered IP address.
         """
         
+        if self._udp:
+            return
+
         self._ip, self._port, self._ssrc = ip, port, ssrc
 
         logger.debug(f"Connecting to voice server: IP={ip}, Port={port}, SSRC={ssrc}")

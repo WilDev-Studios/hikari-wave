@@ -5,4 +5,4 @@ description: Library Constants
 
 ## Constants
 
-::: hikariwave.constants
+::: hikariwave.internal.constants

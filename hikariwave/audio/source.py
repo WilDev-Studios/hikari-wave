@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+import os
+
 __all__ = (
     "AudioSource",
     "BufferAudioSource",
@@ -84,6 +86,10 @@ class FileAudioSource(AudioSource):
         name : str | None
             If provided, an internal name used for display purposes - Default `None`.
         """
+
+        if not os.path.exists(filepath):
+            error: str = f"Provided filepath does not exist: {filepath}"
+            raise FileNotFoundError(error)
         
         self._filepath: str = filepath
 

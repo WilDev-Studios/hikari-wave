@@ -5,4 +5,4 @@ description: Errors
 
 ## Error
 
-::: hikariwave.error
+::: hikariwave.internal.error

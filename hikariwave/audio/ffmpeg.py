@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from hikariwave.constants import Audio
+from hikariwave.internal.constants import Audio
 
 import asyncio
 import logging

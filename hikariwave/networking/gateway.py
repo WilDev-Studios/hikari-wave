@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hikariwave.constants import CloseCode, Constants, Opcode
-from hikariwave.error import GatewayError
 from hikariwave.event.types import WaveEventType
+from hikariwave.internal.constants import CloseCode, Constants, Opcode
+from hikariwave.internal.error import GatewayError
 from typing import Any, Callable, Coroutine, TYPE_CHECKING
 
 import asyncio
@@ -301,6 +301,9 @@ class VoiceGateway:
             If the opening handshake failed.
         """
         
+        if self._websocket:
+            return
+
         logger.debug(f"Connecting to gateway: {gateway_url}")
         self._gateway = gateway_url
 

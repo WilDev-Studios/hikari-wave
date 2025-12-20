@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hikariwave.audio.ffmpeg import FFmpeg
 from hikariwave.connection import VoiceConnection
-from hikariwave.error import GatewayError
 from hikariwave.event.factory import EventFactory
 from hikariwave.event.types import WaveEventType
+from hikariwave.internal.error import GatewayError
 from typing import TypeAlias
 
 import asyncio
@@ -38,7 +37,7 @@ class VoiceClient:
 
     __slots__ = (
         "_bot", "_connections", "_connectionsr", "_channels", "_members",
-        "_ssrcs", "_ssrcsr", "_states", "_event_factory", "_ffmpeg",
+        "_ssrcs", "_ssrcsr", "_states", "_event_factory",
     )
 
     def __init__(
@@ -52,7 +51,16 @@ class VoiceClient:
         ----------
         bot : hikari.GatewayBot
             The `hikari`-based Discord bot to link this voice system with.
+        
+        Raises
+        ------
+        TypeError
+            If `bot` isn't a `hikari.GatewayBot`.
         """
+
+        if not isinstance(bot, hikari.GatewayBot):
+            error: str = "Provided bot must be a `hikari.GatewayBot`"
+            raise TypeError(error)
         
         self._bot: hikari.GatewayBot = bot
         self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
@@ -69,25 +77,95 @@ class VoiceClient:
         self._states: dict[MemberID, tuple[bool, bool]] = {}
 
         self._event_factory: EventFactory = EventFactory(self._bot)
-        self._ffmpeg: FFmpeg = FFmpeg()
     
-    async def _disconnect(self, guild_id: hikari.Snowflakeish) -> None:
+    async def _connect(self, guild_id: hikari.Snowflake, channel_id: hikari.Snowflake, mute: bool, deaf: bool, disconnect: bool = False) -> VoiceConnection:
         try:
-            connection: VoiceConnection = self._connections.pop(guild_id)
-        except KeyError:
+            if disconnect:
+                await self._disconnect(guild_id)
+            
+            if guild_id in self._connections and not disconnect:
+                return self._connections[guild_id]
+
+            logger.info(f"Connecting to voice: Guild={guild_id}, Channel={channel_id}, Mute={mute}, Deaf={deaf}")
+
+            await self._bot.update_voice_state(guild_id, channel_id, self_mute=mute, self_deaf=deaf)
+
+            try:
+                server_update, state_update = await asyncio.gather(
+                    self._bot.wait_for(
+                        hikari.VoiceServerUpdateEvent, 3.0,
+                        lambda e: e.guild_id == guild_id
+                    ),
+                    self._bot.wait_for(
+                        hikari.VoiceStateUpdateEvent, 3.0,
+                        lambda e: e.guild_id == guild_id and e.state.channel_id == channel_id and e.state.user_id == self._bot.get_me().id
+                    )
+                )
+            except asyncio.TimeoutError:
+                error: str = "Voice server/state update timed out"
+                raise GatewayError(error)
+
+            guild: hikari.Guild = await self._bot.rest.fetch_guild(guild_id)
+            members: dict[hikari.Snowflake, hikari.Member] = {}
+
+            for state in guild.get_voice_states().values():
+                if state.user_id == self._bot.get_me().id or state.channel_id != channel_id:
+                    continue
+
+                self._states[state.member.id] = (
+                    state.is_guild_deafened or state.is_self_deafened,
+                    state.is_guild_muted or state.is_self_muted,
+                )
+
+                members[state.member.id] = state.member
+                self._members[state.member.id] = channel_id
+            
+            self._channels[channel_id] = VoiceChannelMeta(set(), guild_id, channel_id, members)
+
+            connection: VoiceConnection = VoiceConnection(
+                self,
+                guild_id,
+                channel_id,
+                server_update.endpoint,
+                state_update.state.session_id,
+                server_update.token,
+            )
+            await connection._connect()
+            self._connections[guild_id] = connection
+            self._connectionsr[channel_id] = guild_id
+
+            self._event_factory.emit(
+                WaveEventType.BOT_JOIN_VOICE,
+                self._bot,
+                channel_id,
+                guild_id,
+                deaf,
+                mute,
+            )
+
+            return connection
+        except Exception:
+            await self._disconnect(guild_id)
+            raise
+
+    async def _disconnect(self, guild_id: hikari.Snowflake) -> None:
+        if guild_id not in self._connections:
             return
+        
+        connection: VoiceConnection = self._connections.pop(guild_id)
 
         logger.info(f"Disconnecting from voice: Guild={guild_id}, Channel={connection._channel_id}")
 
         del self._connectionsr[connection._channel_id]
         await connection._disconnect()
 
-        cmeta: VoiceChannelMeta = self._channels.pop(connection._channel_id)
-        for member_id in cmeta.members.keys():
-            del self._members[member_id]
-            ssrc: int | None = self._ssrcs.pop(member_id, None)
-            if ssrc:
-                self._ssrcsr.pop(ssrc, None)
+        cmeta: VoiceChannelMeta = self._channels.pop(connection._channel_id, None)
+        if cmeta:
+            for member_id in cmeta.members.keys():
+                del self._members[member_id]
+                ssrc: int | None = self._ssrcs.pop(member_id, None)
+                if ssrc:
+                    self._ssrcsr.pop(ssrc, None)
 
         self._event_factory.emit(
             WaveEventType.BOT_LEAVE_VOICE,
@@ -95,9 +173,6 @@ class VoiceClient:
             connection._channel_id,
             guild_id,
         )
-
-        if len(self._connections) == 0:
-            await self._ffmpeg.stop()
 
     async def _disconnected(self, event: hikari.VoiceStateUpdateEvent) -> None:
         if event.state.user_id != self._bot.get_me().id:
@@ -164,7 +239,7 @@ class VoiceClient:
             )
         # Member Left Channel
         elif not new_channel_id and old_channel_id:
-            del self._states[member.id]
+            self._states.pop(member.id, None)
 
             if old_channel_id in self._channels:
                 cmeta: VoiceChannelMeta = self._channels[old_channel_id]
@@ -248,66 +323,28 @@ class VoiceClient:
         ------
         asyncio.TimeoutError
             If Discord doesn't send a corresponding voice server/state update.
+        TypeError
+            - If `guild_id` or `channel_id` aren't `hikari.Snowflakeish`.
+            - If `mute` or `deaf` aren't `bool`.
         """
 
-        logger.info(f"Connecting to voice: Guild={guild_id}, Channel={channel_id}, Mute={mute}, Deaf={deaf}")
-
-        await self._bot.update_voice_state(guild_id, channel_id, self_mute=mute, self_deaf=deaf)
-
-        try:
-            server_update, state_update = await asyncio.gather(
-                self._bot.wait_for(
-                    hikari.VoiceServerUpdateEvent, 3.0,
-                    lambda e: e.guild_id == guild_id
-                ),
-                self._bot.wait_for(
-                    hikari.VoiceStateUpdateEvent, 3.0,
-                    lambda e: e.guild_id == guild_id and e.state.channel_id == channel_id and e.state.user_id == self._bot.get_me().id
-                )
-            )
-        except asyncio.TimeoutError:
-            error: str = "Voice server/state update timed out"
-            raise GatewayError(error)
-
-        guild: hikari.Guild = await self._bot.rest.fetch_guild(guild_id)
-        members: dict[hikari.Snowflake, hikari.Member] = {}
-
-        for state in guild.get_voice_states().values():
-            if state.user_id == self._bot.get_me().id or state.channel_id != channel_id:
-                continue
-
-            self._states[state.member.id] = (
-                state.is_guild_deafened or state.is_self_deafened,
-                state.is_guild_muted or state.is_self_muted,
-            )
-
-            members[state.member.id] = state.member
-            self._members[state.member.id] = channel_id
+        if not isinstance(guild_id, hikari.Snowflakeish):
+            error: str = "Provided guild ID must be of type `hikari.Snowflakeish`"
+            raise TypeError(error)
         
-        self._channels[channel_id] = VoiceChannelMeta(set(), guild_id, channel_id, members)
+        if not isinstance(channel_id, hikari.Snowflakeish):
+            error: str = "Provided channel ID must be of type `hikari.Snowflakeish`"
+            raise TypeError(error)
+        
+        if not isinstance(mute, bool):
+            error: str = "Provided mute state must be of type `bool`"
+            raise TypeError(error)
+        
+        if not isinstance(deaf, bool):
+            error: str = "Provided deaf state must be of type `bool`"
+            raise TypeError(error)
 
-        connection: VoiceConnection = VoiceConnection(
-            self,
-            guild_id,
-            channel_id,
-            server_update.endpoint,
-            state_update.state.session_id,
-            server_update.token,
-        )
-        await connection._connect()
-        self._connections[guild_id] = connection
-        self._connectionsr[channel_id] = guild_id
-
-        self._event_factory.emit(
-            WaveEventType.BOT_JOIN_VOICE,
-            self._bot,
-            channel_id,
-            guild_id,
-            deaf,
-            mute,
-        )
-
-        return connection
+        return await self._connect(guild_id, channel_id, mute, deaf)
     
     @property
     def connections(self) -> dict[hikari.Snowflake, VoiceConnection]:
@@ -336,6 +373,8 @@ class VoiceClient:
 
         Raises
         ------
+        TypeError
+            If `guild_id` or `channel_id` aren't `hikari.Snowflakeish`.
         ValueError
             If neither of `guild_id` or `channel_id` are provided.
         """
@@ -343,6 +382,14 @@ class VoiceClient:
         if not guild_id and not channel_id:
             error: str = "At least guild_id or channel_id must be defined"
             raise ValueError(error)
+        
+        if guild_id and not isinstance(guild_id, hikari.Snowflakeish):
+            error: str = "Provided guild ID must be of type `hikari.Snowflakeish`"
+            raise TypeError(error)
+        
+        if channel_id and not isinstance(channel_id, hikari.Snowflakeish):
+            error: str = "Provided channel ID must be of type `hikari.Snowflakeish`"
+            raise TypeError(error)
         
         if channel_id:
             guild_id = self._connectionsr[channel_id]
@@ -377,6 +424,8 @@ class VoiceClient:
 
         Raises
         ------
+        TypeError
+            If `guild_id` or `channel_id` aren't `hikari.Snowflakeish`.
         ValueError
             If neither of `guild_id` or `channel_id` are provided.
         """
@@ -385,6 +434,14 @@ class VoiceClient:
             error: str = "At least guild_id or channel_id must be defined"
             raise ValueError(error)
         
+        if guild_id and not isinstance(guild_id, hikari.Snowflakeish):
+            error: str = "Provided guild ID must be of type `hikari.Snowflakeish`"
+            raise TypeError(error)
+        
+        if channel_id and not isinstance(channel_id, hikari.Snowflakeish):
+            error: str = "Provided channel ID must be of type `hikari.Snowflakeish`"
+            raise TypeError(error)
+        
         if channel_id:
             guild_id = self._connectionsr[channel_id]
         
@@ -392,3 +449,77 @@ class VoiceClient:
             return self._connections[guild_id]
         except KeyError:
             return
+    
+    async def move(
+        self,
+        channel_id: hikari.Snowflakeish,
+        *,
+        guild_id: hikari.Snowflakeish | None = None,
+        old_channel_id: hikari.Snowflakeish | None = None,
+        mute: bool = False,
+        deaf: bool = True,
+    ) -> VoiceConnection:
+        """
+        Move to another voice channel.
+        
+        Parameters
+        ----------
+        channel_id : hikari.Snowflakeish
+            The ID of the channel to move to.
+        guild_id : hikari.Snowflakeish | None
+            The ID of the guild you're currently in - Default `None`.
+        old_channel_id : hikari.Snowflakeish | None
+            The ID of the channel you're currently in - Default `None`.
+        mute : bool 
+            If the bot should be muted upon moving channels - Default `False`.
+        deaf : bool
+            If the bot should be deafened upon moving channels - Default `True`.
+        
+        Note
+        ----
+        Either `guild_id` or `old_channel_id` have to be provided.
+
+        Returns
+        -------
+        VoiceConnection
+            The active connection to the new voice channel, once fully connected.
+        
+        Raises
+        ------
+        asyncio.TimeoutError
+            If Discord doesn't send a corresponding voice server/state update.
+        TypeError
+            - If `channel_id`, `old_channel_id`, or `guild_id` aren't `hikari.Snowflakeish`.
+            - If `mute` or `deaf` aren't `bool`.
+        ValueError
+            If neither of `guild_id` or `old_channel_id` are provided.
+        """
+
+        if not guild_id and not old_channel_id:
+            error: str = "Either `guild_id` or `old_channel_id` have to be provided"
+            raise ValueError(error)
+        
+        if not isinstance(channel_id, hikari.Snowflakeish):
+            error: str = "Provided channel ID must be of type `hikari.Snowflakeish`"
+            raise TypeError(error)
+        
+        if old_channel_id and not isinstance(old_channel_id, hikari.Snowflakeish):
+            error: str = "Provided old channel ID must be of type `hikari.Snowflakeish`"
+            raise TypeError(error)
+        
+        if guild_id and not isinstance(guild_id, hikari.Snowflakeish):
+            error: str = "Provided guild ID must be of type `hikari.Snowflakeish`"
+            raise TypeError(error)
+        
+        if not isinstance(mute, bool):
+            error: str = "Provided mute state must be of type `bool`"
+            raise TypeError(error)
+        
+        if not isinstance(deaf, bool):
+            error: str = "Provided deaf state must be of type `bool`"
+            raise TypeError(error)
+        
+        if old_channel_id:
+            guild_id = self._connectionsr[old_channel_id]
+
+        return await self._connect(guild_id, channel_id, mute, deaf, True)

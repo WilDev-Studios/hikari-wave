@@ -5,4 +5,4 @@ description: Packet Encryption
 
 ## Encrypt
 
-::: hikariwave.encrypt
+::: hikariwave.internal.encrypt

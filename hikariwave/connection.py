@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from enum import auto, IntEnum
 from hikariwave.audio.player import AudioPlayer
-from hikariwave.audio.source import AudioSource
-from hikariwave.encrypt import Encrypt
 from hikariwave.event.types import WaveEventType
+from hikariwave.internal.encrypt import Encrypt
 from hikariwave.networking.gateway import Opcode, ReadyPayload, SessionDescriptionPayload, VoiceGateway
 from hikariwave.networking.server import VoiceServer
 from typing import Callable, TYPE_CHECKING
@@ -16,12 +16,26 @@ if TYPE_CHECKING:
 
 __all__ = ("VoiceConnection",)
 
+class ConnectionStatus(IntEnum):
+    """Represents the current state of a voice connection."""
+
+    CONNECTED = auto()
+    """Connected to voice gateway and voice server."""
+    CONNECTING = auto()
+    """Connecting to voice gateway and voice server."""
+    DISCONNECTED = auto()
+    """Disconnected from voice gateway and voice server."""
+    NEW = auto()
+    """Instantiated and waiting to begin connection."""
+    RECONNECTING = auto()
+    """Reconnecting to voice gateway and voice server."""
+
 class VoiceConnection:
     """An active connection to a Discord voice channel."""
 
     __slots__ = (
         "_client", "_guild_id", "_channel_id", "_endpoint", "_session_id", "_token",
-        "_server", "_gateway", "_ready", "_ssrc", "_mode", "_secret", "_player",
+        "_server", "_gateway", "_ready", "_state", "_ssrc", "_mode", "_secret", "_player",
     )
 
     def __init__(
@@ -71,6 +85,7 @@ class VoiceConnection:
         self._gateway.set_callback(Opcode.READY, self._gateway_ready)
         self._gateway.set_callback(Opcode.SESSION_DESCRIPTION, self._gateway_session_description)
         self._ready: asyncio.Event = asyncio.Event()
+        self._state: ConnectionStatus = ConnectionStatus.NEW
 
         self._ssrc: int = None
         self._mode: Callable[[bytes, int, bytes, bytes], bytes] = None
@@ -79,12 +94,36 @@ class VoiceConnection:
         self._player: AudioPlayer = AudioPlayer(self)
     
     async def _connect(self) -> None:
-        await self._gateway.connect(f"{self._endpoint}/?v=8")
-        await self._ready.wait()
+        if self._state in (ConnectionStatus.CONNECTED, ConnectionStatus.CONNECTING):
+            return
+        
+        self._state = ConnectionStatus.CONNECTING
+        self._ready.clear()
+
+        try:
+            await self._gateway.connect(f"{self._endpoint}/?v=8")
+            await self._ready.wait()
+
+            if self._state == ConnectionStatus.CONNECTING:
+                self._state = ConnectionStatus.CONNECTED
+        except Exception:
+            self._state = ConnectionStatus.NEW
+            raise
 
     async def _disconnect(self) -> None:
-        await self._server.disconnect()
-        await self._gateway.disconnect()
+        if self._state == ConnectionStatus.DISCONNECTED:
+            return
+        
+        self._state = ConnectionStatus.DISCONNECTED
+
+        if self._player:
+            await self._player.stop()
+        
+        if self._server:
+            await self._server.disconnect()
+    
+        if self._gateway:
+            await self._gateway.disconnect()
 
     async def _gateway_ready(self, payload: ReadyPayload) -> None:
         self._ssrc = payload.ssrc
@@ -92,6 +131,9 @@ class VoiceConnection:
         supported_modes: list[str] = payload.modes
         chosen_mode: str = None
         for mode in supported_modes:
+            if mode not in Encrypt.SUPPORTED:
+                continue
+
             if not hasattr(Encrypt, mode):
                 continue
 
@@ -107,6 +149,19 @@ class VoiceConnection:
         await self._gateway.select_protocol(ip, port, chosen_mode)
 
     async def _gateway_reconnect(self) -> None:
+        if self._state == ConnectionStatus.RECONNECTING:
+            return
+        
+        self._state = ConnectionStatus.RECONNECTING
+        self._ready.clear()
+
+        if self._player and self._player.is_playing:
+            await self._player.pause()
+    
+        await self._server.disconnect()
+        await self._gateway.disconnect()
+
+        self._server = VoiceServer(self._client)
         self._gateway = VoiceGateway(
             self,
             self._guild_id,
@@ -115,6 +170,8 @@ class VoiceConnection:
             self._session_id,
             self._token,
         )
+        self._gateway.set_callback(Opcode.READY, self._gateway_ready)
+        self._gateway.set_callback(Opcode.SESSION_DESCRIPTION, self._gateway_session_description)
         await self._gateway.connect(f"{self._endpoint}/?v=8")
 
         self._client._event_factory.emit(
@@ -126,31 +183,17 @@ class VoiceConnection:
     async def _gateway_session_description(self, payload: SessionDescriptionPayload) -> None:
         self._mode = getattr(Encrypt, payload.mode)
         self._secret = payload.secret
-        self._ready.set()
-    
-    async def add_queue(self, source: AudioSource) -> None:
-        """
-        Add an audio source to the player's queue.
-        
-        Parameters
-        ----------
-        source : AudioSource
-            The source to add to the queue.
-        """
+        self._state = ConnectionStatus.CONNECTED
 
-        await self._player.add_queue(source)
-    
+        self._ready.set()
+
+        if not self._player._resumed.is_set() and self._player._current:
+            await self._player.resume()
+
     @property
     def channel_id(self) -> hikari.Snowflakeish:
         """The ID of the channel this connection is in."""
         return self._channel_id
-
-    async def clear_queue(self) -> None:
-        """
-        Clear audio from the player's queue.
-        """
-
-        await self._player.clear_queue()
 
     @property
     def client(self) -> hikari.GatewayBot:
@@ -170,78 +213,15 @@ class VoiceConnection:
         return self._guild_id
 
     @property
-    def latency_gateway(self) -> float:
-        """Get the heartbeat latency of this connection with Discord's gateway."""
+    def latency_gateway(self) -> float | None:
+        """Get the heartbeat latency of this connection with Discord's gateway, if connected."""
+        
+        if not self._gateway._last_heartbeat_ack:
+            return None
         
         return self._gateway._last_heartbeat_ack - self._gateway._last_heartbeat_sent
-    
-    async def next(self) -> None:
-        """
-        Play the next audio in queue.
-        """
-
-        await self._player.next()
-
-    async def pause(self) -> None:
-        """
-        Pause playback of the current audio.
-        """
-        
-        await self._player.pause()
-
-    async def play(self, source: AudioSource) -> None:
-        """
-        Play audio from a source.
-        
-        Parameters
-        ----------
-        source : AudioSource
-            The source that contains the audio.
-        """
-
-        await self._player.play(source)
     
     @property
     def player(self) -> AudioPlayer:
         """The audio player associated with this connection."""
         return self._player
-
-    async def previous(self) -> None:
-        """
-        Play the latest previously played audio.
-        """
-
-        await self._player.previous()
-
-    async def remove_queue(self, source: AudioSource) -> None:
-        """
-        Remove an audio source from the player's queue.
-        
-        Parameters
-        ----------
-        source : AudioSource
-            The source to remove from the queue.
-        """
-
-        await self._player.remove_queue(source)
-    
-    async def resume(self) -> None:
-        """
-        Resume playback of the current audio.
-        """
-        
-        await self._player.resume()
-    
-    async def shuffle(self) -> None:
-        """
-        Shuffle all audio in the player's queue.
-        """
-
-        await self._player.shuffle()
-
-    async def stop(self) -> None:
-        """
-        Stop playback of the current audio.
-        """
-        
-        await self._player.stop()

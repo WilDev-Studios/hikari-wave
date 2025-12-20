@@ -6,8 +6,7 @@ A lightweight, native voice implementation for `hikari`-based Discord bots.
 - **Python:** `3.10+`
 
 [![Python](https://img.shields.io/pypi/pyversions/hikari-wave?style=for-the-badge)](https://pypi.org/project/hikari-wave/)
-[![PyPI](https://img.shields.io/pypi/v/hikari-wave?style=for-the-badge)](https://pypi.org/project/hikari-wave/)
-[![Downloads](https://img.shields.io/pypi/dd/hikari-wave?style=for-the-badge)](https://pypi.org/project/hikari-wave/)
+[![Downloads](https://img.shields.io/pypi/dm/hikari-wave?style=for-the-badge)](https://pypi.org/project/hikari-wave/)
 [![Documentation Status](https://readthedocs.org/projects/hikari-wave/badge/?version=latest&style=for-the-badge)](https://hikari-wave.readthedocs.io/en/latest/?badge=latest)
 
 ## Overview
@@ -25,7 +24,6 @@ No separate servers. No complex setup. Just voice.
 ## Features
 
 - Native Discord voice gateway implementation
-- No third-party services required (`FFmpeg` only)
 - Clean, async-first API
 - Strong typing and documentation throughout
 - Supplemental voice events for better control and UX
@@ -67,7 +65,7 @@ async def on_join(event):
     connection = await voice.connect(event.guild_id, event.channel_id)
     source = FileAudioSource("test.mp3")
 
-    await connection.play(source)
+    await connection.player.play(source)
 ```
 
 That's it.
@@ -88,7 +86,7 @@ That's it.
 ## Documentation
 
 Full documentation is available at:
-👉 [https://hikari-wave.wildevstudios.net/](https://hikari-wave.wildevstudios.net/)
+[https://hikari-wave.wildevstudios.net/](https://hikari-wave.wildevstudios.net/)
 
 ## Contributing
 
