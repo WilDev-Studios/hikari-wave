@@ -283,10 +283,7 @@ class AudioPlayer:
 
         self._resumed.clear()
 
-        try:
-            await self._connection._gateway.set_speaking(False)
-        except Exception as e:
-            logger.error(f"Error setting speaking state in pause: {e}")
+        await self._connection._gateway.set_speaking(False)
         
         return Result.succeeded()
 
@@ -399,10 +396,7 @@ class AudioPlayer:
         if self._resumed.is_set():
             return Result.failed(ResultReason.PLAYING)
 
-        try:
-            await self._connection._gateway.set_speaking(True)
-        except Exception as e:
-            logger.error(f"Error setting speaking state in resume: {e}")
+        await self._connection._gateway.set_speaking(True)
         
         self._resumed.set()
         return Result.succeeded()
@@ -469,10 +463,7 @@ class AudioPlayer:
             self._priority_source = None
             self._current = None
         
-        try:
-            await self._connection._gateway.set_speaking(False)
-        except Exception as e:
-            logger.error(f"Error setting speaking state in stop: {e}")
+        await self._connection._gateway.set_speaking(False)
         
         return Result.succeeded()
     
