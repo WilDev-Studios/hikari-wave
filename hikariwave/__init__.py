@@ -1,8 +1,8 @@
 """
-### hikari-wave: `0.0.1a5`\n
+### hikari-wave: `0.1.0a1`\n
 A lightweight, native voice implementation for `hikari`-based Discord bots.
 
-**Documentation:** https://hikari-wave.wildevstudios.net/en/0.0.1a5\n
+**Documentation:** https://hikari-wave.wildevstudios.net/en/0.1.0a1\n
 **GitHub:** https://github.com/WilDev-Studios/hikari-wave
 """
 
