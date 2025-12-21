@@ -1,13 +1,20 @@
-# hikari-wave
+<p align="center">
+    <img src="https://raw.githubusercontent.com/WilDev-Studios/hikari-wave/main/assets/banner.png" width=650/>
+</p>
 
-A lightweight, native voice implementation for `hikari`-based Discord bots.
+<p align="center">
+    <img src="https://img.shields.io/pypi/pyversions/hikari-wave?style=for-the-badge"/>
+    <img src="https://img.shields.io/pypi/dm/hikari-wave?style=for-the-badge"/>
+    <img src="https://readthedocs.org/projects/hikari-wave/badge/?version=latest&style=for-the-badge"/>
+</p>
 
-- **Latest:** `0.0.1a5`
-- **Python:** `3.10+`
+<p align="center"><b>A lightweight, native voice implementation for hikari-based Discord bots</b></p>
 
-[![Python](https://img.shields.io/pypi/pyversions/hikari-wave?style=for-the-badge)](https://pypi.org/project/hikari-wave/)
-[![Downloads](https://img.shields.io/pypi/dm/hikari-wave?style=for-the-badge)](https://pypi.org/project/hikari-wave/)
-[![Documentation Status](https://readthedocs.org/projects/hikari-wave/badge/?version=latest&style=for-the-badge)](https://hikari-wave.readthedocs.io/en/latest/?badge=latest)
+<p align="center">
+    <b>Latest:</b> <code>0.0.1a5</code>
+    &nbsp;|&nbsp;
+    <b>Python:</b> <code>3.10+</code>
+</p>
 
 ## Overview
 
