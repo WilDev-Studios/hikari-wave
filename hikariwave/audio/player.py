@@ -1,13 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from hikariwave.audio.ffmpeg import FFmpeg
-from hikariwave.audio.source import (
-    AudioSource,
-    BufferAudioSource,
-    FileAudioSource,
-    URLAudioSource,
-)
+from hikariwave.audio.source import AudioSource
 from hikariwave.event.types import WaveEventType
 from hikariwave.internal.constants import Audio
 from hikariwave.internal.result import Result, ResultReason
@@ -30,10 +24,10 @@ class AudioPlayer:
     """Responsible for all audio."""
 
     __slots__ = (
-        "_connection", "_ffmpeg", "_ended", "_skip", "_resumed",
+        "_connection", "_buffer", "_ended", "_skip", "_resumed",
         "_sequence", "_timestamp", "_nonce",
         "_queue", "_history", "_priority_source", "_current",
-        "_player_task", "_lock", "_track_completed",
+        "_player_task", "_lock", "_track_completed", "_volume",
     )
 
     def __init__(self, connection: VoiceConnection, max_history: int = 20) -> None:
@@ -45,11 +39,11 @@ class AudioPlayer:
         connection : VoiceConnection
             The active voice connection.
         max_history : int
-            Maximum number of tracks to keep in history - Default `20`.
+            Maximum number of tracks to keep in history.
         """
         
         self._connection: VoiceConnection = connection
-        self._ffmpeg: FFmpeg = FFmpeg()
+        self._buffer: asyncio.Queue[bytes | None] = asyncio.Queue()
 
         self._ended: asyncio.Event = asyncio.Event()
         self._skip: asyncio.Event = asyncio.Event()
@@ -69,6 +63,7 @@ class AudioPlayer:
         self._lock: asyncio.Lock = asyncio.Lock()
 
         self._track_completed: bool = False
+        self._volume: float | str | None = None
 
     def _generate_rtp(self) -> bytes:
         header: bytearray = bytearray(12)
@@ -81,21 +76,15 @@ class AudioPlayer:
         return bytes(header)
 
     async def _play_internal(self, source: AudioSource) -> bool:
+        self._buffer = asyncio.Queue()
         self._ended.clear()
         self._skip.clear()
         self._track_completed = False
 
-        await self._connection._gateway.set_speaking(True)
+        source._volume = source._volume or self._volume
 
-        if isinstance(source, BufferAudioSource):
-            await self._ffmpeg.start(source._buffer)
-        elif isinstance(source, FileAudioSource):
-            await self._ffmpeg.start(source._filepath)
-        elif isinstance(source, URLAudioSource):
-            await self._ffmpeg.start(source._url)
-        else:
-            error: str = "Audio source must inherit from AudioSource"
-            raise ValueError(error)
+        await self._connection._gateway.set_speaking(True)
+        await self._connection._client._ffmpeg.submit(source, self._buffer)
         
         self._connection._client._event_factory.emit(
             WaveEventType.AUDIO_BEGIN,
@@ -104,6 +93,8 @@ class AudioPlayer:
             source,
         )
         
+        while self._buffer.empty(): await asyncio.sleep(0.05)
+
         frame_duration: float = Audio.FRAME_LENGTH / 1000
         frame_count: int = 0
         start_time: float = time.perf_counter()
@@ -117,7 +108,7 @@ class AudioPlayer:
                 start_time = time.perf_counter()
                 continue
 
-            opus: bytes = await self._ffmpeg.read()
+            opus: bytes = await self._buffer.get()
             if not opus:
                 self._track_completed = True
                 break
@@ -143,7 +134,6 @@ class AudioPlayer:
 
         await self._send_silence()
         await self._connection._gateway.set_speaking(False)
-        await self._ffmpeg.stop()
 
         return self._track_completed
 
@@ -293,10 +283,7 @@ class AudioPlayer:
 
         self._resumed.clear()
 
-        try:
-            await self._connection._gateway.set_speaking(False)
-        except Exception as e:
-            logger.error(f"Error setting speaking state in pause: {e}")
+        await self._connection._gateway.set_speaking(False)
         
         return Result.succeeded()
 
@@ -409,13 +396,32 @@ class AudioPlayer:
         if self._resumed.is_set():
             return Result.failed(ResultReason.PLAYING)
 
-        try:
-            await self._connection._gateway.set_speaking(True)
-        except Exception as e:
-            logger.error(f"Error setting speaking state in resume: {e}")
+        await self._connection._gateway.set_speaking(True)
         
         self._resumed.set()
         return Result.succeeded()
+
+    def set_volume(self, volume: float | str | None = None) -> None:
+        """
+        Set the default volume of this player.
+        Can be `None`, any scaled value (`1.0`, `2.0`, `0.5`, etc.) or dB-based (`-3dB`, `0.5dB`, etc.).
+        
+        Parameters
+        ----------
+        volume : float | str | None
+            The volume to set as a default for this player.
+        
+        Raises
+        ------
+        TypeError
+            If `volume` is provided and it's not `float`, `int`, or `str`.
+        """
+
+        if volume is not None and not isinstance(volume, (float, int, str)):
+            error: str = "Provided volume must be a `float`, `int`, or `str`"
+            raise TypeError(error)
+        
+        self._volume = volume
 
     async def shuffle(self) -> Result:
         """
@@ -457,9 +463,11 @@ class AudioPlayer:
             self._priority_source = None
             self._current = None
         
-        try:
-            await self._connection._gateway.set_speaking(False)
-        except Exception as e:
-            logger.error(f"Error setting speaking state in stop: {e}")
+        await self._connection._gateway.set_speaking(False)
         
         return Result.succeeded()
+    
+    @property
+    def volume(self) -> float | str | None:
+        """If set, the player's default volume."""
+        return self._volume

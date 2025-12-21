@@ -19,6 +19,8 @@ class Audio:
     """16 bit, unsigned integer."""
     BIT_32U: int = 2**32 - 1
     """32 bit, unsigned integer."""
+    BITRATE: str = "96k"
+    """The audio bitrate."""
     BLOCKSIZE: int = io.DEFAULT_BUFFER_SIZE
     """FFmpeg blocksize."""
     CHANNELS: int = 2

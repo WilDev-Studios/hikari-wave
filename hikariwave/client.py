@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hikariwave.audio.ffmpeg import FFmpegPool
 from hikariwave.connection import VoiceConnection
 from hikariwave.event.factory import EventFactory
 from hikariwave.event.types import WaveEventType
+from hikariwave.internal.constants import Audio
 from hikariwave.internal.error import GatewayError
 from typing import TypeAlias
 
@@ -36,13 +38,17 @@ class VoiceClient:
     """Voice system implementation for `hikari`-based Discord bots."""
 
     __slots__ = (
-        "_bot", "_connections", "_connectionsr", "_channels", "_members",
-        "_ssrcs", "_ssrcsr", "_states", "_event_factory",
+        "_bot", "_audio_bitrate", "_audio_channels", "_audio_frame_length",
+        "_connections", "_connectionsr", "_channels", "_members",
+        "_ssrcs", "_ssrcsr", "_states", "_event_factory", "_ffmpeg",
     )
 
     def __init__(
         self,
         bot: hikari.GatewayBot,
+        *,
+        bitrate: str = Audio.BITRATE,
+        channels: int = Audio.CHANNELS,
     ) -> None:
         """
         Create a new voice client.
@@ -51,6 +57,10 @@ class VoiceClient:
         ----------
         bot : hikari.GatewayBot
             The `hikari`-based Discord bot to link this voice system with.
+        bitrate : str
+            The audio output bitrate.
+        channels : int
+            The amount of audio channels.
         
         Raises
         ------
@@ -66,6 +76,9 @@ class VoiceClient:
         self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
         self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
 
+        self._audio_bitrate: str = bitrate
+        self._audio_channels: int = channels
+
         self._connections: dict[GuildID, VoiceConnection] = {}
         self._connectionsr: dict[ChannelID, GuildID] = {}
 
@@ -77,6 +90,7 @@ class VoiceClient:
         self._states: dict[MemberID, tuple[bool, bool]] = {}
 
         self._event_factory: EventFactory = EventFactory(self._bot)
+        self._ffmpeg: FFmpegPool = FFmpegPool(self)
     
     async def _connect(self, guild_id: hikari.Snowflake, channel_id: hikari.Snowflake, mute: bool, deaf: bool, disconnect: bool = False) -> VoiceConnection:
         try:
@@ -292,6 +306,30 @@ class VoiceClient:
         """The controlling OAuth2 bot."""
         return self._bot
 
+    async def close(self) -> None:
+        """
+        Shut down every connection and clean up.
+        """
+
+        self._bot.unsubscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
+        self._bot.unsubscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
+
+        await asyncio.gather(
+            *(self._disconnect(guild_id) for guild_id in self._connections.keys())
+        )
+
+        if self._connections: self._connections.clear()
+        if self._connectionsr: self._connectionsr.clear()
+
+        if self._channels: self._channels.clear()
+        if self._members: self._members.clear()
+        if self._ssrcs: self._ssrcs.clear()
+        if self._ssrcsr: self._ssrcsr.clear()
+
+        if self._states: self._states.clear()
+
+        await self._ffmpeg.stop()
+
     async def connect(
         self,
         guild_id: hikari.Snowflakeish,
@@ -310,9 +348,9 @@ class VoiceClient:
         channel_id : hikari.Snowflakeish
             The ID of the channel to connect to.
         mute : bool 
-            If the bot should be muted upon joining the channel - Default `False`.
+            If the bot should be muted upon joining the channel.
         deaf : bool
-            If the bot should be deafened upon joining the channel - Default `True`.
+            If the bot should be deafened upon joining the channel.
         
         Returns
         -------
@@ -363,9 +401,9 @@ class VoiceClient:
         Parameters
         ----------
         guild_id : hikari.Snowflakeish | None
-            The ID of the guild that the channel to disconnect from is in - Default `None`.
+            The ID of the guild that the channel to disconnect from is in.
         channel_id : hikari.Snowflakeish | None
-            The ID of the channel to disconnect from - Default `None`.
+            The ID of the channel to disconnect from.
         
         Note
         ----
@@ -409,9 +447,9 @@ class VoiceClient:
         Parameters
         ----------
         guild_id : hikari.Snowflakeish | None
-            The ID of the guild that the connection is handling - Default `None`.
+            The ID of the guild that the connection is handling.
         channel_id : hikari.Snowflakeish | None
-            The ID of the channel that the connection is handling - Default `None`.
+            The ID of the channel that the connection is handling.
         
         Note
         ----
@@ -467,13 +505,13 @@ class VoiceClient:
         channel_id : hikari.Snowflakeish
             The ID of the channel to move to.
         guild_id : hikari.Snowflakeish | None
-            The ID of the guild you're currently in - Default `None`.
+            The ID of the guild you're currently in.
         old_channel_id : hikari.Snowflakeish | None
-            The ID of the channel you're currently in - Default `None`.
+            The ID of the channel you're currently in.
         mute : bool 
-            If the bot should be muted upon moving channels - Default `False`.
+            If the bot should be muted upon moving channels.
         deaf : bool
-            If the bot should be deafened upon moving channels - Default `True`.
+            If the bot should be deafened upon moving channels.
         
         Note
         ----
@@ -521,5 +559,4 @@ class VoiceClient:
         
         if old_channel_id:
             guild_id = self._connectionsr[old_channel_id]
-
         return await self._connect(guild_id, channel_id, mute, deaf, True)
