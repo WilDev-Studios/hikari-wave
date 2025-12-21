@@ -102,6 +102,8 @@ class Opcode(IntEnum):
     """`SERVER/JSON` - Acknowledge a successful session resume."""
     CLIENTS_CONNECT = 11
     """`SERVER/JSON` - One or more clients have connection to the voice channel."""
+    UNDOCUMENTED_12 = 12
+    """`SERVER/JSON` - Unknown as of `0.1.0a1`."""
     CLIENT_DISCONNECT = 13
     """`SERVER/JSON` - A client has disconnected from the voice channel."""
     UNDOCUMENTED_15 = 15

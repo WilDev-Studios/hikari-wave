@@ -7,7 +7,8 @@ from hikariwave.audio.source import (
     FileAudioSource,
     URLAudioSource,
 )
-from typing import TypeAlias, TYPE_CHECKING
+from hikariwave.audio.store import FrameStore
+from typing import TYPE_CHECKING
 
 import asyncio
 import logging
@@ -16,8 +17,6 @@ import time
 
 if TYPE_CHECKING:
     from hikariwave.client import VoiceClient
-
-Source: TypeAlias = bytearray | bytes | memoryview | str
 
 logger: logging.Logger = logging.getLogger("hikari-wave.ffmpeg")
 
@@ -41,7 +40,7 @@ class FFmpegWorker:
         self._process: asyncio.subprocess.Process = None
         self._client: VoiceClient = client
 
-    async def encode(self, source: AudioSource, output: asyncio.Queue[bytes | None]) -> None:
+    async def encode(self, source: AudioSource, output: FrameStore) -> None:
         """
         Encode an entire audio source and stream each Opus frame into the output.
         
@@ -49,8 +48,8 @@ class FFmpegWorker:
         ----------
         source : AudioSource
             The audio source to read and encode.
-        output : asyncio.Queue[bytes | None]
-            The output buffer to write each Opus frame into.
+        output : FrameStore
+            The frame storage object to stream the output Opus frames into.
         """
 
         pipeable: bool = False
@@ -122,7 +121,7 @@ class FFmpegWorker:
                             packet_bytes.startswith(b"OpusHead") or
                             packet_bytes.startswith(b"OpusTags")
                         ):
-                            await output.put(packet_bytes)
+                            await output.store_frame(packet_bytes)
                         
                         current_packet.clear()
             except asyncio.IncompleteReadError:
@@ -130,7 +129,7 @@ class FFmpegWorker:
         
         logger.debug(f"FFmpeg finished in {(time.perf_counter() - start) * 1000:.2f}ms")
 
-        await output.put(None)
+        await output.store_frame(None)
         await self.stop()
     
     async def stop(self) -> None:
@@ -161,7 +160,8 @@ class FFmpegPool:
     """Manages all FFmpeg processes and deploys them when needed."""
 
     __slots__ = (
-        "_client", "_max", "_total", "_min",
+        "_client", "_enabled", 
+        "_max", "_total", "_min",
         "_available", "_unavailable",
     )
 
@@ -189,7 +189,7 @@ class FFmpegPool:
         self._available: asyncio.Queue[FFmpegWorker] = asyncio.Queue()
         self._unavailable: set[FFmpegWorker] = set()
     
-    async def submit(self, source: AudioSource, output: asyncio.Queue[bytes | None]) -> None:
+    async def submit(self, source: AudioSource, output: FrameStore) -> None:
         """
         Submit and schedule an audio source to be encoded into Opus and stream output into a buffer.
         
@@ -197,8 +197,8 @@ class FFmpegPool:
         ----------
         source : AudioSource
             The audio source to read and encode.
-        output : asyncio.Queue[bytes | None]
-            The buffer to stream Opus frames into.
+        output : FrameStore
+            The frame storage object to stream the output Opus frames into.
         """
         
         if not self._enabled: return

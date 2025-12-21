@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from hikariwave.audio.source import AudioSource
+from hikariwave.audio.store import FrameStore
 from hikariwave.event.types import WaveEventType
 from hikariwave.internal.constants import Audio
 from hikariwave.internal.result import Result, ResultReason
@@ -24,7 +25,7 @@ class AudioPlayer:
     """Responsible for all audio."""
 
     __slots__ = (
-        "_connection", "_buffer", "_ended", "_skip", "_resumed",
+        "_connection", "_store", "_ended", "_skip", "_resumed",
         "_sequence", "_timestamp", "_nonce",
         "_queue", "_history", "_priority_source", "_current",
         "_player_task", "_lock", "_track_completed", "_volume",
@@ -43,7 +44,7 @@ class AudioPlayer:
         """
         
         self._connection: VoiceConnection = connection
-        self._buffer: asyncio.Queue[bytes | None] = asyncio.Queue()
+        self._store: FrameStore = FrameStore(False) # until further tested and functional
 
         self._ended: asyncio.Event = asyncio.Event()
         self._skip: asyncio.Event = asyncio.Event()
@@ -76,7 +77,6 @@ class AudioPlayer:
         return bytes(header)
 
     async def _play_internal(self, source: AudioSource) -> bool:
-        self._buffer = asyncio.Queue()
         self._ended.clear()
         self._skip.clear()
         self._track_completed = False
@@ -84,7 +84,7 @@ class AudioPlayer:
         source._volume = source._volume or self._volume
 
         await self._connection._gateway.set_speaking(True)
-        await self._connection._client._ffmpeg.submit(source, self._buffer)
+        await self._connection._client._ffmpeg.submit(source, self._store)
         
         self._connection._client._event_factory.emit(
             WaveEventType.AUDIO_BEGIN,
@@ -93,7 +93,7 @@ class AudioPlayer:
             source,
         )
         
-        while self._buffer.empty(): await asyncio.sleep(0.05)
+        await self._store.wait()
 
         frame_duration: float = Audio.FRAME_LENGTH / 1000
         frame_count: int = 0
@@ -108,8 +108,8 @@ class AudioPlayer:
                 start_time = time.perf_counter()
                 continue
 
-            opus: bytes = await self._buffer.get()
-            if not opus:
+            opus: bytes = await self._store.fetch_frame()
+            if opus is None:
                 self._track_completed = True
                 break
 
