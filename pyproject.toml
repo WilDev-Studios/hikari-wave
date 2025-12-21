@@ -46,5 +46,9 @@ Repository = "https://github.com/WilDev-Studios/hikari-wave"
 Documentation = "https://hikari-wave.wildevstudios.net/"
 Issues = "https://github.com/WilDev-Studios/hikari-wave/issues"
 
+[tool.setuptools.packages.find]
+include = ["hikariwave"]
+exclude = ["assets*"]
+
 [tool.setuptools.package-data]
 hikariwave = ["py.typed"]
