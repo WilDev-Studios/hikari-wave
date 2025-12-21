@@ -18,7 +18,7 @@
 
 ## Overview
 
-`hikari-wave` is a standalone voice module for [`hikari`](https://github.com/hikari-py.hikari) that provides **direct voice gateway communication** without requiring external backends like `Lavalink`.
+`hikari-wave` is a standalone voice module for [`hikari`](https://github.com/hikari-py/hikari) that provides **direct voice gateway communication** without requiring external backends like `Lavalink`.
 
 It is designed to be:
 
