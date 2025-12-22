@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from enum import IntEnum
 
-import io
-import struct
-
 __all__ = (
     "Audio",
     "CloseCode",
@@ -19,23 +16,14 @@ class Audio:
     """16 bit, unsigned integer."""
     BIT_32U: int = 2**32 - 1
     """32 bit, unsigned integer."""
-    BITRATE: str = "96k"
-    """The audio bitrate."""
-    BLOCKSIZE: int = io.DEFAULT_BUFFER_SIZE
+    BLOCKSIZE: int = 32 * 1024
     """FFmpeg blocksize."""
-    CHANNELS: int = 2
-    """Audio channels."""
     FRAME_LENGTH: int = 20
     """Length of Opus frame in milliseconds."""
-    SAMPLE_SIZE: int = struct.calcsize('h') * CHANNELS
-    """Size of frame sample."""
     SAMPLING_RATE: int = 48000
     """Sampling rate."""
     SAMPLES_PER_FRAME: int = int(SAMPLING_RATE / 1000 * FRAME_LENGTH)
     """Amount of samples per Opus frame."""
-
-    FRAME_SIZE: int = SAMPLES_PER_FRAME * SAMPLE_SIZE
-    """Total size of Opus frame."""
 
 class CloseCode(IntEnum):
     """Collection of a voice close event codes."""

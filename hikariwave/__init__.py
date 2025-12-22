@@ -1,14 +1,15 @@
 """
-### hikari-wave: `0.1.0a2`\n
+### hikari-wave: `0.2.0a1`\n
 A lightweight, native voice implementation for `hikari`-based Discord bots.
 
-**Documentation:** https://hikari-wave.wildevstudios.net/en/0.1.0a2\n
+**Documentation:** https://hikari-wave.wildevstudios.net/en/0.2.0a1\n
 **GitHub:** https://github.com/WilDev-Studios/hikari-wave
 """
 
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.audio.source import *
 from hikariwave.client import VoiceClient
+from hikariwave.config import Config, BufferConfig, BufferMode
 from hikariwave.connection import VoiceConnection
 from hikariwave.event.events import *
 from hikariwave.internal.error import *

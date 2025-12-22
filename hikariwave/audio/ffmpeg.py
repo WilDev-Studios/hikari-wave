@@ -4,10 +4,7 @@ from hikariwave.internal.constants import Audio
 from hikariwave.audio.source import (
     AudioSource,
     BufferAudioSource,
-    FileAudioSource,
-    URLAudioSource,
 )
-from hikariwave.audio.store import FrameStore
 from typing import TYPE_CHECKING
 
 import asyncio
@@ -16,7 +13,7 @@ import os
 import time
 
 if TYPE_CHECKING:
-    from hikariwave.client import VoiceClient
+    from hikariwave.connection import VoiceConnection
 
 logger: logging.Logger = logging.getLogger("hikari-wave.ffmpeg")
 
@@ -25,22 +22,16 @@ __all__ = ("FFmpegPool", "FFmpegWorker",)
 class FFmpegWorker:
     """Manages a single FFmpeg process when requested."""
 
-    __slots__ = ("_process", "_client",)
+    __slots__ = ("_process",)
 
-    def __init__(self, client: VoiceClient) -> None:
+    def __init__(self) -> None:
         """
         Create a new worker.
-
-        Parameters
-        ----------
-        client : VoiceClient
-            The voice system client application.
         """
 
         self._process: asyncio.subprocess.Process = None
-        self._client: VoiceClient = client
 
-    async def encode(self, source: AudioSource, output: FrameStore) -> None:
+    async def encode(self, source: AudioSource, connection: VoiceConnection) -> None:
         """
         Encode an entire audio source and stream each Opus frame into the output.
         
@@ -48,35 +39,36 @@ class FFmpegWorker:
         ----------
         source : AudioSource
             The audio source to read and encode.
-        output : FrameStore
-            The frame storage object to stream the output Opus frames into.
+        connection : VoiceConnection
+            The active connection requesting this encoding.
         """
 
         pipeable: bool = False
 
         if isinstance(source, BufferAudioSource):
-            content: bytearray | bytes | memoryview = source._buffer
+            content: bytearray | bytes | memoryview = source._content
             pipeable = True
-        elif isinstance(source, FileAudioSource):
-            content: str = source._filepath
-        elif isinstance(source, URLAudioSource):
-            content: str = source._url
+        elif isinstance(source, AudioSource):
+            content: str = source._content
         else:
             error: str = f"Provided audio source doesn't inherit AudioSource"
             raise TypeError(error)
 
-        volume: float | str = source._volume or 1.0
+        bitrate: str = source._bitrate or connection._config.bitrate
+        channels: int = source._channels or connection._config.channels
+        volume: float | str = source._volume or connection._config.volume
 
         args: list[str] = [
             "ffmpeg",
+            "-blocksize", str(Audio.BLOCKSIZE),
             "-i", "pipe:0" if pipeable else content,
             "-map", "0:a",
             "-af", f"volume={volume}",
             "-acodec", "libopus",
             "-f", "opus",
             "-ar", str(Audio.SAMPLING_RATE),
-            "-ac", str(self._client._audio_channels),
-            "-b:a", self._client._audio_bitrate,
+            "-ac", str(channels),
+            "-b:a", bitrate,
             "-application", "audio",
             "-frame_duration", str(Audio.FRAME_LENGTH),
             "-loglevel", "warning",
@@ -121,7 +113,7 @@ class FFmpegWorker:
                             packet_bytes.startswith(b"OpusHead") or
                             packet_bytes.startswith(b"OpusTags")
                         ):
-                            await output.store_frame(packet_bytes)
+                            await connection.player._store.store_frame(packet_bytes)
                         
                         current_packet.clear()
             except asyncio.IncompleteReadError:
@@ -129,7 +121,7 @@ class FFmpegWorker:
         
         logger.debug(f"FFmpeg finished in {(time.perf_counter() - start) * 1000:.2f}ms")
 
-        await output.store_frame(None)
+        await connection.player._store.store_frame(None)
         await self.stop()
     
     async def stop(self) -> None:
@@ -160,26 +152,23 @@ class FFmpegPool:
     """Manages all FFmpeg processes and deploys them when needed."""
 
     __slots__ = (
-        "_client", "_enabled", 
+        "_enabled", 
         "_max", "_total", "_min",
         "_available", "_unavailable",
     )
 
-    def __init__(self, client: VoiceClient, max_per_core: int = 2, max_global: int = 16) -> None:
+    def __init__(self, max_per_core: int = 2, max_global: int = 16) -> None:
         """
         Create a FFmpeg process pool.
         
         Parameters
         ----------
-        client : VoiceClient
-            The voice system client application.
         max_per_core : int
             The maximum amount of processes that can be spawned per logical CPU core.
         max_global : int
             The maximum, hard-cap amount of processes that can be spawned.
         """
         
-        self._client: VoiceClient = client
         self._enabled: bool = True
 
         self._max: int = min(max_global, os.cpu_count() * max_per_core)
@@ -189,7 +178,7 @@ class FFmpegPool:
         self._available: asyncio.Queue[FFmpegWorker] = asyncio.Queue()
         self._unavailable: set[FFmpegWorker] = set()
     
-    async def submit(self, source: AudioSource, output: FrameStore) -> None:
+    async def submit(self, source: AudioSource, connection: VoiceConnection) -> None:
         """
         Submit and schedule an audio source to be encoded into Opus and stream output into a buffer.
         
@@ -197,14 +186,14 @@ class FFmpegPool:
         ----------
         source : AudioSource
             The audio source to read and encode.
-        output : FrameStore
-            The frame storage object to stream the output Opus frames into.
+        connection : VoiceConnection
+            The active connection requesting this encoding.
         """
         
         if not self._enabled: return
 
         if self._available.empty() and self._total < self._max:
-            worker: FFmpegWorker = FFmpegWorker(self._client)
+            worker: FFmpegWorker = FFmpegWorker()
             self._total += 1
         else:
             worker: FFmpegWorker = await self._available.get()
@@ -213,7 +202,7 @@ class FFmpegPool:
 
         async def _run() -> None:
             try:
-                await worker.encode(source, output)
+                await worker.encode(source, connection)
             finally:
                 self._unavailable.remove(worker)
 

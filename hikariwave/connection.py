@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from enum import auto, IntEnum
 from hikariwave.audio.player import AudioPlayer
+from hikariwave.config import Config
 from hikariwave.event.types import WaveEventType
 from hikariwave.internal.encrypt import Encrypt
 from hikariwave.networking.gateway import Opcode, ReadyPayload, SessionDescriptionPayload, VoiceGateway
@@ -34,7 +35,7 @@ class VoiceConnection:
     """An active connection to a Discord voice channel."""
 
     __slots__ = (
-        "_client", "_guild_id", "_channel_id", "_endpoint", "_session_id", "_token",
+        "_client", "_guild_id", "_channel_id", "_endpoint", "_session_id", "_token", "_config",
         "_server", "_gateway", "_ready", "_state", "_ssrc", "_mode", "_secret", "_player",
     )
 
@@ -72,6 +73,7 @@ class VoiceConnection:
         self._endpoint: str = endpoint
         self._session_id: str = session_id
         self._token: str = token
+        self._config: Config = self._client._config
 
         self._server: VoiceServer = VoiceServer(self._client)
         self._gateway: VoiceGateway = VoiceGateway(
@@ -225,3 +227,24 @@ class VoiceConnection:
     def player(self) -> AudioPlayer:
         """The audio player associated with this connection."""
         return self._player
+
+    def set_config(self, config: Config) -> None:
+        """
+        Set this specific connection's configuration.
+        
+        Parameters
+        ----------
+        config : Config
+            This connections configuration.
+        
+        Raises
+        ------
+        TypeError
+            If the provided config isn't `Config`.
+        """
+
+        if not isinstance(config, Config):
+            error: str = "The provided config must be `Config`"
+            raise TypeError(error)
+    
+        self._config = config

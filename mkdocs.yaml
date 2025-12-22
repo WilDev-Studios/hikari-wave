@@ -75,7 +75,9 @@ nav:
       - FFmpeg: pages/api/audio/ffmpeg.md
       - Player: pages/api/audio/player.md
       - Source: pages/api/audio/source.md
+      - Store: pages/api/audio/store.md
     - Client: pages/api/client.md
+    - Config: pages/api/config.md
     - Connection: pages/api/connection.md
     - Event:
       - Events: pages/api/event/events.md
@@ -91,6 +93,6 @@ nav:
       - Server: pages/api/networking/server.md
   - Changelog:
     - Index: pages/changelog/index.md
-    - 0.1.0a2 (12-21-2025): pages/changelog/0.1.0a2.md
-    - 0.1.0a1 (12-20-2025): pages/changelog/0.1.0a1.md
+    - 0.2.0a1 (12-21-2025): pages/changelog/0.2.0a1.md
+    - 0.1.0 (12/20/25-12/21/25): pages/changelog/0.1.0.md
     - 0.0.1 (12/16/25-12/19/25): pages/changelog/0.0.1.md
