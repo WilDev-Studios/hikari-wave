@@ -31,7 +31,7 @@ class AudioPlayer:
         "_player_task", "_lock", "_track_completed", "_volume",
     )
 
-    def __init__(self, connection: VoiceConnection, max_history: int = 20) -> None:
+    def __init__(self, connection: VoiceConnection) -> None:
         """
         Create a new audio player.
         
@@ -39,12 +39,10 @@ class AudioPlayer:
         ----------
         connection : VoiceConnection
             The active voice connection.
-        max_history : int
-            Maximum number of tracks to keep in history.
         """
         
         self._connection: VoiceConnection = connection
-        self._store: FrameStore = FrameStore(False) # until further tested and functional
+        self._store: FrameStore = FrameStore(self._connection)
 
         self._ended: asyncio.Event = asyncio.Event()
         self._skip: asyncio.Event = asyncio.Event()
@@ -55,8 +53,8 @@ class AudioPlayer:
         self._timestamp: int = 0
         self._nonce: int = 0
 
-        self._queue: deque[AudioSource] = deque()
-        self._history: deque[AudioSource] = deque(maxlen=max_history)
+        self._queue: deque[AudioSource] = deque(maxlen=self._connection._config.max_queue)
+        self._history: deque[AudioSource] = deque(maxlen=self._connection._config.max_history)
         self._priority_source: AudioSource = None
         self._current: AudioSource = None
 
@@ -84,7 +82,7 @@ class AudioPlayer:
         source._volume = source._volume or self._volume
 
         await self._connection._gateway.set_speaking(True)
-        await self._connection._client._ffmpeg.submit(source, self._store)
+        await self._connection._client._ffmpeg.submit(source, self._connection)
         
         self._connection._client._event_factory.emit(
             WaveEventType.AUDIO_BEGIN,
@@ -150,10 +148,14 @@ class AudioPlayer:
                 else:
                     self._current = None
                     self._player_task = None
+
+                    await self._store.clear()
                     return
             
                 self._current = source
             
+            await self._store.clear()
+
             completed: bool = await self._play_internal(source)
 
             async with self._lock:
@@ -464,7 +466,8 @@ class AudioPlayer:
             self._current = None
         
         await self._connection._gateway.set_speaking(False)
-        
+        await self._store.clear()
+
         return Result.succeeded()
     
     @property

@@ -9,6 +9,7 @@ A lightweight, native voice implementation for `hikari`-based Discord bots.
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.audio.source import *
 from hikariwave.client import VoiceClient
+from hikariwave.config import Config, BufferConfig, BufferMode
 from hikariwave.connection import VoiceConnection
 from hikariwave.event.events import *
 from hikariwave.internal.error import *

@@ -208,6 +208,8 @@ class VoiceGateway:
 
     async def _recv_packet(self) -> dict[str, Any]:
         try:
+            if not self._websocket: return {}
+            
             payload: bytes | str = await self._websocket.recv()
 
             if isinstance(payload, (bytes, bytearray)):

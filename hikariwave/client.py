@@ -2,16 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hikariwave.audio.ffmpeg import FFmpegPool
+from hikariwave.config import Config
 from hikariwave.connection import VoiceConnection
 from hikariwave.event.factory import EventFactory
 from hikariwave.event.types import WaveEventType
-from hikariwave.internal.constants import Audio
 from hikariwave.internal.error import GatewayError
 from typing import TypeAlias
 
 import asyncio
 import hikari
 import logging
+import os
+import shutil
 
 __all__ = ("VoiceClient",)
 
@@ -38,7 +40,7 @@ class VoiceClient:
     """Voice system implementation for `hikari`-based Discord bots."""
 
     __slots__ = (
-        "_bot", "_audio_bitrate", "_audio_channels", "_audio_frame_length",
+        "_bot", "_config", "_audio_frame_length",
         "_connections", "_connectionsr", "_channels", "_members",
         "_ssrcs", "_ssrcsr", "_states", "_event_factory", "_ffmpeg",
     )
@@ -47,8 +49,7 @@ class VoiceClient:
         self,
         bot: hikari.GatewayBot,
         *,
-        bitrate: str = Audio.BITRATE,
-        channels: int = Audio.CHANNELS,
+        config: Config | None = None,
     ) -> None:
         """
         Create a new voice client.
@@ -57,27 +58,29 @@ class VoiceClient:
         ----------
         bot : hikari.GatewayBot
             The `hikari`-based Discord bot to link this voice system with.
-        bitrate : str
-            The audio output bitrate.
-        channels : int
-            The amount of audio channels.
+        config : Config | None
+            If provided, the global configuration settings.
         
         Raises
         ------
         TypeError
-            If `bot` isn't a `hikari.GatewayBot`.
+            - If `bot` isn't a `hikari.GatewayBot`.
+            - If `config` is provided and isn't `Config`.
         """
 
         if not isinstance(bot, hikari.GatewayBot):
             error: str = "Provided bot must be a `hikari.GatewayBot`"
             raise TypeError(error)
         
+        if config and not isinstance(config, Config):
+            error: str = "Provided config must be `Config`"
+            raise TypeError(error)
+        
         self._bot: hikari.GatewayBot = bot
         self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
         self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
-
-        self._audio_bitrate: str = bitrate
-        self._audio_channels: int = channels
+        self._bot.subscribe(hikari.StoppingEvent, self.close)
+        self._config: Config = config if config else Config()
 
         self._connections: dict[GuildID, VoiceConnection] = {}
         self._connectionsr: dict[ChannelID, GuildID] = {}
@@ -90,7 +93,9 @@ class VoiceClient:
         self._states: dict[MemberID, tuple[bool, bool]] = {}
 
         self._event_factory: EventFactory = EventFactory(self._bot)
-        self._ffmpeg: FFmpegPool = FFmpegPool(self)
+        self._ffmpeg: FFmpegPool = FFmpegPool()
+
+        if os.path.exists("wavecache"): shutil.rmtree("wavecache")
     
     async def _connect(self, guild_id: hikari.Snowflake, channel_id: hikari.Snowflake, mute: bool, deaf: bool, disconnect: bool = False) -> VoiceConnection:
         try:
@@ -187,6 +192,8 @@ class VoiceClient:
             connection._channel_id,
             guild_id,
         )
+
+        if os.path.exists(f"wavecache/{guild_id}"): shutil.rmtree(f"wavecache/{guild_id}")
 
     async def _disconnected(self, event: hikari.VoiceStateUpdateEvent) -> None:
         if event.state.user_id != self._bot.get_me().id:
@@ -313,6 +320,7 @@ class VoiceClient:
 
         self._bot.unsubscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
         self._bot.unsubscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
+        self._bot.unsubscribe(hikari.StoppingEvent, self.close)
 
         await asyncio.gather(
             *(self._disconnect(guild_id) for guild_id in self._connections.keys())
