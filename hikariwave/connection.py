@@ -94,6 +94,8 @@ class VoiceConnection:
         self._secret: bytes = None
 
         self._player: AudioPlayer = AudioPlayer(self)
+
+        self._client._bot.subscribe(hikari.VoiceServerUpdateEvent, self._server_update)
     
     async def _connect(self) -> None:
         if self._state in (ConnectionStatus.CONNECTED, ConnectionStatus.CONNECTING):
@@ -192,6 +194,22 @@ class VoiceConnection:
         if not self._player._resumed.is_set() and self._player._current:
             await self._player.resume()
 
+    async def _server_update(self, event: hikari.VoiceServerUpdateEvent) -> None:
+        if not event.endpoint:
+            await self._disconnect()
+            return
+        
+        self._endpoint = event.endpoint
+        self._gateway = VoiceGateway(
+            self,
+            self._guild_id,
+            self._channel_id,
+            self._client._bot.get_me().id,
+            self._session_id,
+            event.token,
+        )
+        await self._connect()
+
     @property
     def channel_id(self) -> hikari.Snowflakeish:
         """The ID of the channel this connection is in."""
@@ -207,6 +225,7 @@ class VoiceConnection:
         Disconnect from the current channel.
         """
         
+        self._client._bot.unsubscribe(hikari.VoiceServerUpdateEvent, self._server_update)
         await self._client.disconnect(self._guild_id)
     
     @property
