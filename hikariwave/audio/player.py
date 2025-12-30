@@ -433,7 +433,7 @@ class AudioPlayer:
         Parameters
         ----------
         volume : float | str | None
-            The volume to set as a default for this player.
+            The volume to set as a default for this player - `None` uses connection/client configuration.
         
         Raises
         ------
@@ -445,7 +445,7 @@ class AudioPlayer:
             error: str = "Provided volume must be a `float`, `int`, or `str`"
             raise TypeError(error)
         
-        self._volume = volume
+        self._volume = volume if volume is not None else self._connection._config._volume
 
     async def shuffle(self) -> Result:
         """
