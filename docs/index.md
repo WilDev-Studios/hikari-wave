@@ -146,7 +146,7 @@ If you want early access to new features:
 
 ## Deprecation Policy
 
-To ensure stability while allowing `hikari-wave` to evolve, the project follows a structured and transparency deprecation process.
+To ensure stability while allowing `hikari-wave` to evolve, the project follows a structured and transparent deprecation process.
 
 ### What is considered deprecated?
 
