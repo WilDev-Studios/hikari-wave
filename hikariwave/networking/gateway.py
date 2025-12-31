@@ -48,6 +48,16 @@ class SessionDescriptionPayload(Payload):
     secret: bytes
     """Our secret key that should be used in encryption."""
 
+class SpeakingFlag:
+    """Collection of SPEAKING flags."""
+
+    VOICE: int = 1 << 0
+    """Set state to actively speaking."""
+    SOUNDSHARE: int = 1 << 1
+    """Sharing contextual audio with no speaking indicator."""
+    PRIORITY: int = 1 << 2
+    """Hoist audio volume and lower other user volumes."""
+
 class VoiceGateway:
     """The background communication system with Discord's voice gateway."""
 
@@ -395,7 +405,7 @@ class VoiceGateway:
         
         self._callbacks[opcode] = callback
 
-    async def set_speaking(self, state: bool) -> None:
+    async def set_speaking(self, state: bool, priority: bool = False) -> None:
         """
         Set the SPEAKING state of the client.
         
@@ -403,12 +413,22 @@ class VoiceGateway:
         ----------
         state : bool
             If we are speaking or not.
+        priority : bool
+            If the audio should be prioritized.
         """
+
+        flags: int = 0
+
+        if state:
+            flags |= SpeakingFlag.VOICE
+        
+        if priority:
+            flags |= SpeakingFlag.PRIORITY
         
         await self._send_packet({
             "op": Opcode.SPEAKING,
             'd': {
-                "speaking": int(state),
+                "speaking": flags,
                 "delay": 0,
                 "ssrc": self._ssrc,
             },

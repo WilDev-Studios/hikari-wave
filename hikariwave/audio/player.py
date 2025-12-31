@@ -28,7 +28,7 @@ class AudioPlayer:
         "_connection", "_store", "_ended", "_skip", "_resumed",
         "_sequence", "_timestamp", "_nonce",
         "_queue", "_history", "_priority_source", "_current",
-        "_player_task", "_lock", "_track_completed", "_volume",
+        "_player_task", "_lock", "_track_completed", "_volume", "_priority",
     )
 
     def __init__(self, connection: VoiceConnection) -> None:
@@ -63,6 +63,7 @@ class AudioPlayer:
 
         self._track_completed: bool = False
         self._volume: float | str | None = None
+        self._priority: bool = False
 
     def _generate_rtp(self) -> bytes:
         header: bytearray = bytearray(12)
@@ -81,8 +82,10 @@ class AudioPlayer:
 
         source._volume = source._volume or self._volume
 
-        await self._connection._gateway.set_speaking(True)
         await self._connection._client._ffmpeg.submit(source, self._connection)
+        
+        await self._store.wait()
+        await self._connection._gateway.set_speaking(True, self._priority)
         
         self._connection._client._event_factory.emit(
             WaveEventType.AUDIO_BEGIN,
@@ -90,8 +93,6 @@ class AudioPlayer:
             self._connection._guild_id,
             source,
         )
-        
-        await self._store.wait()
 
         frame_duration: float = Audio.FRAME_LENGTH / 1000
         frame_count: int = 0
@@ -131,7 +132,7 @@ class AudioPlayer:
             self._track_completed = False
 
         await self._send_silence()
-        await self._connection._gateway.set_speaking(False)
+        await self._connection._gateway.set_speaking(False, self._priority)
 
         return self._track_completed
 
@@ -285,7 +286,7 @@ class AudioPlayer:
 
         self._resumed.clear()
 
-        await self._connection._gateway.set_speaking(False)
+        await self._connection._gateway.set_speaking(False, self._priority)
         
         return Result.succeeded()
 
@@ -398,10 +399,31 @@ class AudioPlayer:
         if self._resumed.is_set():
             return Result.failed(ResultReason.PLAYING)
 
-        await self._connection._gateway.set_speaking(True)
+        await self._connection._gateway.set_speaking(True, self._priority)
         
         self._resumed.set()
         return Result.succeeded()
+
+    def set_priority(self, priority: bool) -> None:
+        """
+        Set if this player should play with priority voice enabled.
+        
+        Parameters
+        ----------
+        priority : bool 
+            If the player should playback this audio with a prioritized speaking status.
+        
+        Raises
+        ------
+        TypeError
+            If `priority` isn't `bool`.
+        """
+
+        if not isinstance(priority, bool):
+            error: str = "Provided priority must be `bool`"
+            raise TypeError(error)
+        
+        self._priority = priority
 
     def set_volume(self, volume: float | str | None = None) -> None:
         """
@@ -411,7 +433,7 @@ class AudioPlayer:
         Parameters
         ----------
         volume : float | str | None
-            The volume to set as a default for this player.
+            The volume to set as a default for this player - `None` uses connection/client configuration.
         
         Raises
         ------
@@ -423,7 +445,7 @@ class AudioPlayer:
             error: str = "Provided volume must be a `float`, `int`, or `str`"
             raise TypeError(error)
         
-        self._volume = volume
+        self._volume = volume if volume is not None else self._connection._config._volume
 
     async def shuffle(self) -> Result:
         """
@@ -465,7 +487,7 @@ class AudioPlayer:
             self._priority_source = None
             self._current = None
         
-        await self._connection._gateway.set_speaking(False)
+        await self._connection._gateway.set_speaking(False, self._priority)
         await self._store.clear()
 
         return Result.succeeded()

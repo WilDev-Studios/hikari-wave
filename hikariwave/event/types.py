@@ -10,10 +10,10 @@ __all__ = (
 class VoiceWarningType(IntEnum):
     """A type of voice warning."""
 
-    LATENCY          = auto()
-    """Voice server connection has a high latency."""
-    UNHANDLED_OPCODE = auto()
-    """Voice gateway received an unhandled operation code."""
+    JITTER           = auto()
+    """Maximum jitter has been exceeded."""
+    PACKET_LOSS      = auto()
+    """Maximum packet loss has been exceeded."""
 
 class WaveEventType(IntEnum):
     """A type of supplemental event."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from hikariwave.event.types import WaveEventType
+from hikariwave.internal.constants import Audio
+from hikariwave.event.types import VoiceWarningType, WaveEventType
 from hikariwave.internal.error import ServerError
 from typing import Callable, TYPE_CHECKING
 
@@ -80,11 +81,39 @@ class Protocol(asyncio.DatagramProtocol):
             self._ip_discover_future.set_exception(exc)
             return 
 
+class RTPStats:
+    def __init__(self) -> None:
+        self._prev_arrival: float | None = None
+        self._prev_timestamp: int | None = None
+        self._jitter: float = 0.0
+        self._last_seq: int | None = None
+        self._received: int = 0
+        self._lost: int = 0
+    
+    def update(self, seq: int, timestamp: int, arrival_time: float) -> None:
+        if self._last_seq is not None:
+            expected: int = (self._last_seq + 1) & Audio.BIT_16U
+            if seq != expected:
+                delta: int = (seq - expected) & Audio.BIT_16U
+                self._lost += delta
+        
+        self._last_seq = seq
+        self._received += 1
+
+        arrival: float = arrival_time * Audio.SAMPLING_RATE
+
+        if self._prev_arrival is not None:
+            delta: float = (arrival - self._prev_arrival) - (timestamp - self._prev_timestamp)
+            self._jitter += (abs(delta) - self._jitter) / 16
+        
+        self._prev_arrival = arrival
+        self._prev_timestamp = timestamp
+
 class VoiceServer:
     """The background server responsible for communicating with Discord's voice servers."""
 
     __slots__ = (
-        "_client", "_ip", "_port", "_ssrc", "_udp", "_last_audio", "_watch_task",
+        "_client", "_ip", "_port", "_ssrc", "_udp", "_last_audio", "_watch_task", "_stats",
     )
 
     def __init__(
@@ -109,6 +138,8 @@ class VoiceServer:
 
         self._last_audio: dict[int, float] = {}
         self._watch_task: asyncio.Task = None
+
+        self._stats: dict[int, RTPStats] = {}
 
     async def _discover_ip(self) -> tuple[str, int]:
         loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
@@ -141,12 +172,21 @@ class VoiceServer:
     def _rtp_packet(self, data: bytes) -> None:
         if len(data) < 12: return
 
+        seq: int = struct.unpack_from(">H", data, 2)[0]
+        timestamp: int = struct.unpack_from(">I", data, 4)[0]
         ssrc: int = struct.unpack_from(">I", data, 8)[0]
 
         if ssrc not in self._client._ssrcsr:
             return
 
         now: float = asyncio.get_running_loop().time()
+
+        stats: RTPStats | None = self._stats.get(ssrc)
+        if stats is None:
+            stats = self._stats[ssrc] = RTPStats()
+        
+        stats.update(seq, timestamp, now)
+
         is_new: bool = ssrc not in self._last_audio
         self._last_audio[ssrc] = now
 
@@ -180,6 +220,7 @@ class VoiceServer:
                         continue
 
                     del self._last_audio[ssrc]
+                    self._stats.pop(ssrc, None)
 
                     user_id: hikari.Snowflake = self._client._ssrcsr[ssrc]
                     channel_id: hikari.Snowflake = self._client._members[user_id]
@@ -195,6 +236,47 @@ class VoiceServer:
                         guild,
                         channel.members[user_id],
                     )
+                
+                for ssrc, stats in self._stats.items():
+                    if stats is None:
+                        continue
+
+                    jitter: float = stats._jitter / (Audio.SAMPLING_RATE // 1000)
+                    total: int = stats._received + stats._lost
+                    loss_rate: float = (stats._lost / total) if total else 0.0
+
+                    user_id: hikari.Snowflake = None
+                    channel_id: hikari.Snowflake = None
+                    channel: VoiceChannelMeta = None
+                    guild_id: hikari.Snowflake = None
+
+                    if jitter > Audio.MAX_JITTER:
+                        user_id = self._client._ssrcsr[ssrc]
+                        channel_id = self._client._members[user_id]
+                        channel = self._client._channels[channel_id]
+                        guild_id = channel.guild_id
+
+                        self._client._event_factory.emit(
+                            WaveEventType.VOICE_WARNING,
+                            channel_id,
+                            guild_id,
+                            VoiceWarningType.JITTER,
+                            jitter,
+                        )
+                    
+                    if loss_rate > Audio.MAX_PACKET_LOSS:
+                        user_id = self._client._ssrcsr[ssrc]
+                        channel_id = self._client._members[user_id]
+                        channel = self._client._channels[channel_id]
+                        guild_id = channel.guild_id
+
+                        self._client._event_factory.emit(
+                            WaveEventType.VOICE_WARNING,
+                            channel_id,
+                            guild_id,
+                            VoiceWarningType.PACKET_LOSS,
+                            loss_rate,
+                        )
 
                 await asyncio.sleep(0.05)
         except asyncio.CancelledError:
@@ -243,6 +325,7 @@ class VoiceServer:
             self._watch_task = None
         
         self._last_audio.clear()
+        self._stats.clear()
 
         if self._udp:
             self._udp.close()

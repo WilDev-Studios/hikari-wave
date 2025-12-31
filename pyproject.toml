@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hikari-wave"
-version = "0.2.0a1"
-description = "Voice module for `hikari`-based Discord bots"
+version = "0.3.0a1"
+description = "A lightweight, native voice implementation for hikari-based Discord bots"
 readme = "README.md"
 requires-python = ">= 3.10,<3.15"
 license = "MIT"
@@ -19,7 +19,7 @@ maintainers = [
 classifiers = [
     "Framework :: AsyncIO",
     "Topic :: Communications",
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -32,13 +32,14 @@ classifiers = [
     "Intended Audience :: Developers",
     "Typing :: Typed",
 ]
-keywords = ["async", "bot", "voice", "discord", "hikari"]
+keywords = ["async", "audio", "bot", "voice", "discord", "hikari", "music"]
 dependencies = [
     "aiofiles>=25.1.0,<26",
     "cryptography>=46.0.3,<47",
     "hikari>=2.5,<3",
     "PyNaCl>=1.6,<2",
     "websockets>=15.0,<16",
+    "yt-dlp==2025.12.8",
 ]
 
 [project.urls]
@@ -49,7 +50,6 @@ Issues = "https://github.com/WilDev-Studios/hikari-wave/issues"
 
 [tool.setuptools.packages.find]
 include = ["hikariwave"]
-exclude = ["assets*"]
 
 [tool.setuptools.package-data]
 hikariwave = ["py.typed"]
