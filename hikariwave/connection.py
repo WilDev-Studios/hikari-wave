@@ -234,7 +234,7 @@ class VoiceConnection:
         return self._guild_id
 
     @property
-    def latency_gateway(self) -> float | None:
+    def latency(self) -> float | None:
         """Get the heartbeat latency of this connection with Discord's gateway, if connected."""
         
         if not self._gateway._last_heartbeat_ack:

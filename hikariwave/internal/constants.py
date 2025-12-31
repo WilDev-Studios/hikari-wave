@@ -20,6 +20,10 @@ class Audio:
     """FFmpeg blocksize."""
     FRAME_LENGTH: int = 20
     """Length of Opus frame in milliseconds."""
+    MAX_JITTER: float = 50.0
+    """Maximum jitter in milliseconds before a warning is issued."""
+    MAX_PACKET_LOSS: float = 0.05
+    """Maximum packet loss as a percentage before a warning is issued."""
     SAMPLING_RATE: int = 48000
     """Sampling rate."""
     SAMPLES_PER_FRAME: int = int(SAMPLING_RATE / 1000 * FRAME_LENGTH)
