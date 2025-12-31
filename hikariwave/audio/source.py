@@ -378,6 +378,8 @@ class YouTubeAudioSource(AudioSource):
                 "skip_download": True,
             }) as ydl:
                 self._metadata = ydl.extract_info(self._url, False)
+                self._content = self._metadata["url"]
+                self._headers = self._metadata.get("http_headers", {})
 
         await loop.run_in_executor(None, extract)
 
