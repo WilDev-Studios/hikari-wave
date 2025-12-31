@@ -360,7 +360,22 @@ class YouTubeAudioSource(AudioSource):
 
     async def _extract_metadata(self, loop: asyncio.AbstractEventLoop) -> tuple[str, dict[str]]:
         def extract() -> tuple[str, dict[str]]:
-            with YT({"quiet": True, "no_warnings": True, "format": "bestaudio[ext=m4a]/bestaudio/best"}) as ydl:
+            with YT({
+                "quiet": True,
+                "no_warnings": True,
+                "format": "bestaudio[ext=m4a]/bestaudio/best",
+                "simulate": True,
+                "noplaylist": True,
+                "extract_flat": True,
+                "http_headers": {},
+                "force_generic_extractor": False,
+                "http2": True,
+                "writesubtitles": False,
+                "writeautomaticsub": False,
+                "writethumbnail": False,
+                "writeinfojson": False,
+                "skip_download": True,
+            }) as ydl:
                 metadata: dict[str] = ydl.extract_info(self._url, False)
             
                 return (

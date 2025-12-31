@@ -93,6 +93,7 @@ nav:
       - Server: pages/api/networking/server.md
   - Changelog:
     - Index: pages/changelog/index.md
+    - 0.3.0a2 (STAGING): pages/changelog/0.3.0a2.md
     - 0.3.0a1 (12-30-2025): pages/changelog/0.3.0a1.md
     - 0.2.0 (12/21/25-12/21/25): pages/changelog/0.2.0.md
     - 0.1.0 (12/20/25-12/21/25): pages/changelog/0.1.0.md
