@@ -15,3 +15,5 @@ from hikariwave.event.events import *
 from hikariwave.event.types import VoiceWarningType
 from hikariwave.internal.error import *
 from hikariwave.internal.result import Result, ResultReason
+
+__version__ = "0.3.0a2"
