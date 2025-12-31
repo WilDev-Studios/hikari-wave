@@ -11,7 +11,7 @@
 <p align="center"><b>A lightweight, native voice implementation for hikari-based Discord bots</b></p>
 
 <p align="center">
-    <b>Latest:</b> <code>0.3.0a1</code>
+    <b>Latest:</b> <code>0.3.0a2</code>
     &nbsp;|&nbsp;
     <b>Python:</b> <code>3.10+</code>
 </p>
@@ -151,7 +151,7 @@ If you want early access to new features:
 
 ## Deprecation Policy
 
-To ensure stability while allowing `hikari-wave` to evolve, the project follows a structured and transparency deprecation process.
+To ensure stability while allowing `hikari-wave` to evolve, the project follows a structured and transparent deprecation process.
 
 ### What is considered deprecated?
 
