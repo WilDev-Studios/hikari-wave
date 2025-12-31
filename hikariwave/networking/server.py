@@ -95,7 +95,7 @@ class RTPStats:
             expected: int = (self._last_seq + 1) & Audio.BIT_16U
             if seq != expected:
                 delta: int = (seq - expected) & Audio.BIT_16U
-                self.lost += delta
+                self._lost += delta
         
         self._last_seq = seq
         self._received += 1

@@ -4,6 +4,7 @@ from hikariwave.internal.constants import Audio
 from hikariwave.audio.source import (
     AudioSource,
     BufferAudioSource,
+    YouTubeAudioSource,
 )
 from typing import TYPE_CHECKING
 
@@ -48,6 +49,8 @@ class FFmpegWorker:
         if isinstance(source, BufferAudioSource):
             content: bytearray | bytes | memoryview = source._content
             pipeable = True
+        elif isinstance(source, YouTubeAudioSource):
+            content: str = await source.wait_for_url()
         elif isinstance(source, AudioSource):
             content: str = source._content
         else:
@@ -60,7 +63,6 @@ class FFmpegWorker:
 
         args: list[str] = [
             "ffmpeg",
-            "-blocksize", str(Audio.BLOCKSIZE),
             "-i", "pipe:0" if pipeable else content,
             "-map", "0:a",
             "-af", f"volume={volume}",
@@ -79,7 +81,7 @@ class FFmpegWorker:
             *args,
             stdin=asyncio.subprocess.PIPE if pipeable else None,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
 
         if pipeable:
@@ -91,35 +93,76 @@ class FFmpegWorker:
             except Exception as e:
                 logger.error(f"FFmpeg encode error: {e}")
         
-        start: float = time.perf_counter()
-        while True:
+        async def read_stderr() -> list[str]:
+            output: list[str] = []
+
             try:
-                header: bytes = await self._process.stdout.readexactly(27)
-                if not header.startswith(b"OggS"):
-                    return None
-                
-                segments_count: int = header[26]
-                segment_table: bytes = await self._process.stdout.readexactly(segments_count)
+                while True:
+                    line: bytes = await self._process.stderr.readline()
+                    if not line:
+                        break
 
-                current_packet: bytearray = bytearray()
-                for lacing_value in segment_table:
-                    data: bytes = await self._process.stdout.readexactly(lacing_value)
-                    current_packet.extend(data)
+                    decoded: str = line.decode("utf-8", "replace").strip()
+                    if decoded:
+                        output.append(decoded)
+                        logger.warning(f"FFmpeg stderr: {decoded}")
+            except Exception as e:
+                logger.error(f"Error reading stderr: {e}")
+            
+            return output
 
-                    if lacing_value < 255:
-                        packet_bytes: bytes = bytes(current_packet)
+        stderr_task: asyncio.Task[list[str]] = asyncio.create_task(read_stderr())
 
-                        if not (
-                            packet_bytes.startswith(b"OpusHead") or
-                            packet_bytes.startswith(b"OpusTags")
-                        ):
-                            await connection.player._store.store_frame(packet_bytes)
-                        
-                        current_packet.clear()
-            except asyncio.IncompleteReadError:
-                break
+        start: float = time.perf_counter()
+        frame_count: int = 0
+        try:
+            while True:
+                try:
+                    header: bytes = await self._process.stdout.readexactly(27)
+                    if not header.startswith(b"OggS"):
+                        return None
+                    
+                    segments_count: int = header[26]
+                    segment_table: bytes = await self._process.stdout.readexactly(segments_count)
+
+                    current_packet: bytearray = bytearray()
+                    for lacing_value in segment_table:
+                        data: bytes = await self._process.stdout.readexactly(lacing_value)
+                        current_packet.extend(data)
+
+                        if lacing_value < 255:
+                            packet_bytes: bytes = bytes(current_packet)
+
+                            if not (
+                                packet_bytes.startswith(b"OpusHead") or
+                                packet_bytes.startswith(b"OpusTags")
+                            ):
+                                await connection.player._store.store_frame(packet_bytes)
+                                frame_count += 1
+                            
+                            current_packet.clear()
+                except asyncio.IncompleteReadError:
+                    break
+        except Exception as e:
+            logger.error(f"FFmpeg processing error: {e}")
+            raise
+
+        stderr_output: list[str] = await stderr_task
         
         logger.debug(f"FFmpeg finished in {(time.perf_counter() - start) * 1000:.2f}ms")
+
+        if frame_count == 0 and stderr_output:
+            error: str = "\n".join(stderr_output[-10:])
+            logger.error(f"FFmpeg failed to produce any frames. STDERR:\n{error}")
+            
+            error = f"FFmpeg encoding failed: {error}"
+            raise RuntimeError(error)
+        
+        await self._process.wait()
+        if self._process.returncode != 0:
+            error_msg: str = "\n".join(stderr_output[-10:]) if stderr_output else "No error output"
+            error: str = f"FFmpeg exited with code {self._process.returncode}: {error_msg}"
+            raise RuntimeError(error)
 
         await connection.player._store.store_frame(None)
         await self.stop()

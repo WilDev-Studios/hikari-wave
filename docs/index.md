@@ -82,12 +82,12 @@ That's it.
 - [X] Voice connect / disconnect
 - [X] Audio playback
 - [X] Move, reconnect, resume
-- [X] Player utilities (queue, shuffle, next/previous)
+- [X] Player utilities (queue, shuffle, next/previous, volume, etc.)
 - Audio Sources:
     - [X] Files
     - [X] URLs
     - [X] In-memory buffers
-    - [ ] Media sites (YouTube, SoundCloud, etc.) (planned)
+    - [X] YouTube
 - [ ] Discord `DAVE` (planned)
 
 ## Versioning & Stability Policy

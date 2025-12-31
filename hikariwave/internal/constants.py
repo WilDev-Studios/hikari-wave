@@ -16,8 +16,6 @@ class Audio:
     """16 bit, unsigned integer."""
     BIT_32U: int = 2**32 - 1
     """32 bit, unsigned integer."""
-    BLOCKSIZE: int = 32 * 1024
-    """FFmpeg blocksize."""
     FRAME_LENGTH: int = 20
     """Length of Opus frame in milliseconds."""
     MAX_JITTER: float = 50.0

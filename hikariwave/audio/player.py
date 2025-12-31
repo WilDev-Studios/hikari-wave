@@ -82,8 +82,10 @@ class AudioPlayer:
 
         source._volume = source._volume or self._volume
 
-        await self._connection._gateway.set_speaking(True, self._priority)
         await self._connection._client._ffmpeg.submit(source, self._connection)
+        
+        await self._store.wait()
+        await self._connection._gateway.set_speaking(True, self._priority)
         
         self._connection._client._event_factory.emit(
             WaveEventType.AUDIO_BEGIN,
@@ -91,8 +93,6 @@ class AudioPlayer:
             self._connection._guild_id,
             source,
         )
-        
-        await self._store.wait()
 
         frame_duration: float = Audio.FRAME_LENGTH / 1000
         frame_count: int = 0
