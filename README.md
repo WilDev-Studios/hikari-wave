@@ -51,7 +51,7 @@ Create a basic voice client bot:
 import hikari
 
 bot = hikari.GatewayBot("TOKEN")
-client = hikariwave.VoiceClient(bot)
+voice = hikariwave.VoiceClient(bot)
 
 bot.run()
 ```
