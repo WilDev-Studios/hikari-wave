@@ -290,6 +290,7 @@ class YouTubeAudioSource(AudioSource):
         "_name",
         "_volume",
         "_content",
+        "_headers",
         "_future",
     )
 
@@ -352,20 +353,30 @@ class YouTubeAudioSource(AudioSource):
         self._volume: float | str | None = validate_volume(volume) if volume is not None else None
 
         self._content: str | None = None
+        self._headers: dict[str, str] = {}
 
         loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-        self._future: asyncio.Task[str] = loop.create_task(self._extract_url(loop))
+        self._future: asyncio.Task[tuple[str, dict[str]]] = loop.create_task(self._extract_metadata(loop))
 
-    async def _extract_url(self, loop: asyncio.AbstractEventLoop) -> str:
-        def extract() -> str:
+    async def _extract_metadata(self, loop: asyncio.AbstractEventLoop) -> tuple[str, dict[str]]:
+        def extract() -> tuple[str, dict[str]]:
             with YT({"quiet": True, "no_warnings": True, "format": "bestaudio[ext=m4a]/bestaudio/best"}) as ydl:
-                return ydl.extract_info(self._url, False)["url"]
+                metadata: dict[str] = ydl.extract_info(self._url, False)
             
-        self._content = await loop.run_in_executor(None, extract)
-        return self._content
+                return (
+                    metadata["url"],
+                    metadata.get("http_headers", {}),
+                )
+
+        self._content, self._headers = await loop.run_in_executor(None, extract)
+        return self._content, self._headers
+
+    @staticmethod
+    def _format_headers(headers: dict[str, str]) -> str:
+        return "".join(f"{k}: {v}\r\n" for k, v in headers.items())
 
     @property
-    def future(self) -> asyncio.Task[str]:
+    def future(self) -> asyncio.Task[tuple[str, dict[str]]]:
         """The future that will be completed when the internal media URL is discovered."""
         return self._future
 

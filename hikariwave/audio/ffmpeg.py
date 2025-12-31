@@ -45,12 +45,16 @@ class FFmpegWorker:
         """
 
         pipeable: bool = False
+        headers: str | None = None
 
         if isinstance(source, BufferAudioSource):
             content: bytearray | bytes | memoryview = source._content
             pipeable = True
         elif isinstance(source, YouTubeAudioSource):
             content: str = await source.wait_for_url()
+
+            if source._headers:
+                headers = YouTubeAudioSource._format_headers(source._headers)
         elif isinstance(source, AudioSource):
             content: str = source._content
         else:
@@ -63,6 +67,13 @@ class FFmpegWorker:
 
         args: list[str] = [
             "ffmpeg",
+            "-loglevel", "warning",
+        ]
+
+        if headers:
+            args.extend(["-headers", headers])
+
+        args.extend([
             "-i", "pipe:0" if pipeable else content,
             "-map", "0:a",
             "-af", f"volume={volume}",
@@ -73,9 +84,8 @@ class FFmpegWorker:
             "-b:a", bitrate,
             "-application", "audio",
             "-frame_duration", str(Audio.FRAME_LENGTH),
-            "-loglevel", "warning",
             "pipe:1",
-        ]
+        ])
 
         self._process = await asyncio.create_subprocess_exec(
             *args,
