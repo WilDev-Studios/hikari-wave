@@ -2,12 +2,7 @@ from __future__ import annotations
 
 from enum import IntEnum
 
-__all__ = (
-    "Audio",
-    "CloseCode",
-    "Constants",
-    "Opcode",
-)
+__all__ = ()
 
 class Audio:
     """Collection of audio-related constants."""

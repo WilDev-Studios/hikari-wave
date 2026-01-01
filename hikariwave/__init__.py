@@ -6,14 +6,12 @@ A lightweight, native voice implementation for `hikari`-based Discord bots.
 **GitHub:** https://github.com/WilDev-Studios/hikari-wave
 """
 
-from hikariwave.audio.player import AudioPlayer
-from hikariwave.audio.source import *
-from hikariwave.client import VoiceClient
-from hikariwave.config import Config, BufferConfig, BufferMode
-from hikariwave.connection import VoiceConnection
-from hikariwave.event.events import *
-from hikariwave.event.types import VoiceWarningType
-from hikariwave.internal.error import *
-from hikariwave.internal.result import Result, ResultReason
+from hikariwave.audio import *
+from hikariwave.client import *
+from hikariwave.config import *
+from hikariwave.connection import *
+from hikariwave.event import *
+from hikariwave.internal import *
+from hikariwave.networking import *
 
 __version__ = "0.3.0a2"

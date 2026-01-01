@@ -12,7 +12,7 @@ import os
 if TYPE_CHECKING:
     from hikariwave.connection import VoiceConnection
 
-__all__ = ("FrameStore",)
+__all__ = ()
 
 class FrameStore:
     """Mode-switching capable storage buffer."""

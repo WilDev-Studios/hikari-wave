@@ -6,7 +6,7 @@ from hikariwave.internal.constants import Audio
 import nacl.secret as secret
 import struct
 
-__all__ = ("Encrypt",)
+__all__ = ()
 
 class Encrypt:
     """Container class for all supported, non-deprecated encryption modes."""
