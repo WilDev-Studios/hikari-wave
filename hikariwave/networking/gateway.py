@@ -134,7 +134,6 @@ class VoiceGateway:
                 "seq_ack": seq_ack,
             }
         })
-        logger.debug(f"Heartbeat: T={t}, SeqAck={seq_ack}")
 
     async def _loop_heartbeat(self, interval: float) -> None:
         while True:
