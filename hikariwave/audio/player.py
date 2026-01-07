@@ -136,6 +136,9 @@ class AudioPlayer:
             )
 
             frame_duration: float = Audio.FRAME_LENGTH / 1000
+            frames_per_second: int = round(1 / frame_duration)
+            last_second: int = -1
+
             self._frames: int = 0
             start_time: float = time.perf_counter()
 
@@ -189,6 +192,18 @@ class AudioPlayer:
                     logger.debug(f"Frame {self._frames} is {-sleep:.3f}s behind schedule")
                 
                 self._frames += 1
+
+                elapsed_seconds: int = self._frames // frames_per_second
+                if elapsed_seconds > last_second:
+                    last_second = elapsed_seconds
+
+                    self._connection._client._event_factory.emit(
+                        WaveEventType.AUDIO_SECOND,
+                        self._connection._channel_id,
+                        self._connection._guild_id,
+                        source,
+                        elapsed_seconds,
+                    )
         finally:
             if self._state == AudioPlaybackState.BUFFERING:
                 self._set_state(AudioPlaybackState.IDLE)

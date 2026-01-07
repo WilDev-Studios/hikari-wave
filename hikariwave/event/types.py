@@ -35,6 +35,8 @@ class WaveEventType(IntEnum):
     """When audio begins playing."""
     AUDIO_END             = auto()
     """When audio stops playing."""
+    AUDIO_SECOND          = auto()
+    """When audio advances by a second."""
     BOT_JOIN_VOICE        = auto()
     """When the bot joins a channel."""
     BOT_LEAVE_VOICE       = auto()
