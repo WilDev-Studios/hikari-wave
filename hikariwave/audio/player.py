@@ -60,7 +60,7 @@ class AudioPlayer:
     __slots__ = (
         "_connection", "_store",
         "_state",
-        "_sequence", "_timestamp", "_nonce",
+        "_sequence", "_timestamp", "_nonce", "_frames",
         "_queue", "_history", "_priority_source", "_current",
         "_player_task", "_lock",
         "_volume", "_priority",
@@ -85,6 +85,7 @@ class AudioPlayer:
         self._sequence: int = 0
         self._timestamp: int = 0
         self._nonce: int = 0
+        self._frames: int = 0
 
         self._queue: deque[QueuedAudio] = deque(maxlen=self._connection._config.max_queue)
         self._history: deque[AudioSource] = deque(maxlen=self._connection._config.max_history)
@@ -118,8 +119,7 @@ class AudioPlayer:
         try:
             self._stop_event.clear()
             self._skip_event.clear()
-
-            source._volume = source._volume or self._volume
+            setattr(source, "_volume", getattr(source, "_volume", None) or self._volume)
 
             await self._connection._client._ffmpeg.submit(source, self._connection)
             await self._store.wait()
@@ -136,7 +136,7 @@ class AudioPlayer:
             )
 
             frame_duration: float = Audio.FRAME_LENGTH / 1000
-            frame_count: int = 0
+            self._frames: int = 0
             start_time: float = time.perf_counter()
 
             while not self._stop_event.is_set() and not self._skip_event.is_set():
@@ -161,8 +161,6 @@ class AudioPlayer:
                     return False
 
                 if not self._resume_event.is_set():
-                    self._set_state(AudioPlaybackState.PAUSED)
-                    await self._send_silence()
                     continue
 
                 opus: bytes = await self._store.fetch_frame()
@@ -182,14 +180,15 @@ class AudioPlayer:
                 self._sequence = (self._sequence + 1) % Audio.BIT_16U
                 self._timestamp = (self._timestamp + Audio.SAMPLES_PER_FRAME) % Audio.BIT_32U
                 
-                frame_count += 1
-                target: float = start_time + (frame_count * frame_duration)
+                target: float = start_time + (self._frames * frame_duration)
                 sleep: float = target - time.perf_counter()
 
                 if sleep > 0:
                     await asyncio.sleep(sleep)
                 elif sleep < -0.020:
-                    logger.debug(f"Frame {frame_count} is {-sleep:.3f}s behind schedule")
+                    logger.debug(f"Frame {self._frames} is {-sleep:.3f}s behind schedule")
+                
+                self._frames += 1
         finally:
             if self._state == AudioPlaybackState.BUFFERING:
                 self._set_state(AudioPlaybackState.IDLE)
@@ -235,7 +234,7 @@ class AudioPlayer:
                         WaveEventType.AUDIO_END,
                         self._connection._channel_id,
                         self._connection._guild_id,
-                        self._current,
+                        ended,
                     )
         except asyncio.CancelledError:
             pass
@@ -313,6 +312,11 @@ class AudioPlayer:
         return self._current
 
     @property
+    def elapsed(self) -> float:
+        """The amount of seconds of the current audio that has been elapsed."""
+        return self._frames * (Audio.FRAME_LENGTH / 1000)
+
+    @property
     def history(self) -> list[AudioSource]:
         """Get all audio previously played."""
 
@@ -364,6 +368,7 @@ class AudioPlayer:
         self._resume_event.clear()
         self._set_state(AudioPlaybackState.PAUSED)
 
+        await self._send_silence()
         await self._connection._gateway.set_speaking(False, self._priority)
         
         return Result.succeeded()
@@ -427,10 +432,36 @@ class AudioPlayer:
         return Result.succeeded()
 
     @property
+    def progress(self) -> float:
+        """Percentage of the current audio that has been completed (`0.0`-`1.0`)."""
+
+        if self._current is None:
+            return 0.0
+        
+        duration: float = getattr(self._current, "duration", None)
+        if not duration:
+            return 0.0
+        
+        return min(1.0, self.elapsed / duration)
+
+    @property
     def queue(self) -> list[AudioSource]:
         """Get all audio currently in queue."""
 
         return [audio.source for audio in self._queue]
+
+    @property
+    def remaining(self) -> float:
+        """The amount of seconds remaining for the current audio."""
+        
+        if self._current is None:
+            return 0.0
+        
+        duration: float = getattr(self._current, "duration", None)
+        if duration is None:
+            return 0.0
+        
+        return max(0.0, duration - self.elapsed)
 
     async def remove_queue(self, source: AudioSource) -> Result:
         """

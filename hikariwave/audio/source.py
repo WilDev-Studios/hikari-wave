@@ -69,7 +69,7 @@ class AudioSource:
     def channels(self) -> int | None:
         """If provided, the amount of channels this source plays with."""
         return self._channels
-    
+
     @property
     def name(self) -> str | None:
         """If provided, the name assigned to this source for display purposes."""
@@ -287,6 +287,7 @@ class YouTubeAudioSource(AudioSource):
         "_url",
         "_bitrate",
         "_channels",
+        "_duration",
         "_name",
         "_volume",
         "_content",
@@ -354,6 +355,7 @@ class YouTubeAudioSource(AudioSource):
         self._volume: float | str | None = validate_volume(volume) if volume is not None else None
 
         self._content: str | None = None
+        self._duration: float | None = None
         self._headers: dict[str, str] = {}
         self._metadata: dict[str] = {}
 
@@ -380,12 +382,18 @@ class YouTubeAudioSource(AudioSource):
                 self._metadata = ydl.extract_info(self._url, False)
                 self._content = self._metadata["url"]
                 self._headers = self._metadata.get("http_headers", {})
+                self._duration = self._metadata.get("duration")
 
         await loop.run_in_executor(None, extract)
 
     @staticmethod
     def _format_headers(headers: dict[str, str]) -> str:
         return "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+
+    @property
+    def duration(self) -> float | None:
+        """The duration of the media source URL, if discovered - Wait for the source `future` property to finish to attain."""
+        return self._duration
 
     @property
     def metadata(self) -> dict[str, str]:
