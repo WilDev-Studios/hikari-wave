@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from enum import auto, IntEnum
 from hikariwave.audio.source import AudioSource
 from hikariwave.audio.store import FrameStore
 from hikariwave.event.types import AudioBeginOrigin, WaveEventType
@@ -31,14 +32,39 @@ class QueuedAudio:
     origin: AudioBeginOrigin
     """The beginning origin of this audio."""
 
+class AudioPlaybackState(IntEnum):
+    """The current state of the player's playback."""
+
+    BUFFERING = auto()
+    """The player is loading the current audio."""
+    IDLE = auto()
+    """The player is not currently playing any audio."""
+    PAUSED = auto()
+    """The player is currently paused."""
+    PLAYING = auto()
+    """The player is currently playing audio."""
+    STOPPING = auto()
+    """The player is stopping."""
+
+_VALID_TRANSITIONS: dict[AudioPlaybackState, set[AudioPlaybackState]] = {
+    AudioPlaybackState.IDLE: {AudioPlaybackState.BUFFERING},
+    AudioPlaybackState.BUFFERING: {AudioPlaybackState.PLAYING, AudioPlaybackState.IDLE},
+    AudioPlaybackState.PLAYING: {AudioPlaybackState.PAUSED, AudioPlaybackState.STOPPING},
+    AudioPlaybackState.PAUSED: {AudioPlaybackState.PLAYING, AudioPlaybackState.STOPPING},
+    AudioPlaybackState.STOPPING: {AudioPlaybackState.IDLE},
+}
+
 class AudioPlayer:
     """Responsible for all audio."""
 
     __slots__ = (
-        "_connection", "_store", "_ended", "_skip", "_resumed",
+        "_connection", "_store",
+        "_state",
         "_sequence", "_timestamp", "_nonce",
         "_queue", "_history", "_priority_source", "_current",
-        "_player_task", "_lock", "_track_completed", "_volume", "_priority",
+        "_player_task", "_lock",
+        "_volume", "_priority",
+        "_stop_event", "_skip_event", "_resume_event",
     )
 
     def __init__(self, connection: VoiceConnection) -> None:
@@ -54,10 +80,7 @@ class AudioPlayer:
         self._connection: VoiceConnection = connection
         self._store: FrameStore = FrameStore(self._connection)
 
-        self._ended: asyncio.Event = asyncio.Event()
-        self._skip: asyncio.Event = asyncio.Event()
-        self._resumed: asyncio.Event = asyncio.Event()
-        self._resumed.set()
+        self._state: AudioPlaybackState = AudioPlaybackState.IDLE
 
         self._sequence: int = 0
         self._timestamp: int = 0
@@ -71,9 +94,13 @@ class AudioPlayer:
         self._player_task: asyncio.Task = None
         self._lock: asyncio.Lock = asyncio.Lock()
 
-        self._track_completed: bool = False
         self._volume: float | str | None = None
         self._priority: bool = False
+
+        self._stop_event: asyncio.Event = asyncio.Event()
+        self._skip_event: asyncio.Event = asyncio.Event()
+        self._resume_event: asyncio.Event = asyncio.Event()
+        self._resume_event.set()
 
     def _generate_rtp(self) -> bytes:
         header: bytearray = bytearray(12)
@@ -86,108 +113,144 @@ class AudioPlayer:
         return bytes(header)
 
     async def _play_internal(self, source: AudioSource, origin: AudioBeginOrigin) -> bool:
-        self._ended.clear()
-        self._skip.clear()
-        self._track_completed = False
+        completed: bool = False
 
-        source._volume = source._volume or self._volume
+        try:
+            self._stop_event.clear()
+            self._skip_event.clear()
 
-        await self._connection._client._ffmpeg.submit(source, self._connection)
-        
-        await self._store.wait()
-        await self._connection._gateway.set_speaking(True, self._priority)
-        
-        self._connection._client._event_factory.emit(
-            WaveEventType.AUDIO_BEGIN,
-            self._connection._channel_id,
-            self._connection._guild_id,
-            source,
-            origin,
-        )
+            source._volume = source._volume or self._volume
 
-        frame_duration: float = Audio.FRAME_LENGTH / 1000
-        frame_count: int = 0
-        start_time: float = time.perf_counter()
-
-        while not self._ended.is_set() and not self._skip.is_set():
-            if not self._resumed.is_set():
-                await self._send_silence()
-                await self._resumed.wait()
-
-                frame_count = 0
-                start_time = time.perf_counter()
-                continue
-
-            opus: bytes = await self._store.fetch_frame()
-            if opus is None:
-                self._track_completed = True
-                break
-
-            header: bytes = self._generate_rtp()
-            encrypted: bytes = self._connection._mode(self._connection._secret, self._nonce, header, opus)
-            await self._connection._server.send(encrypted)
-
-            self._sequence = (self._sequence + 1) % Audio.BIT_16U
-            self._timestamp = (self._timestamp + Audio.SAMPLES_PER_FRAME) % Audio.BIT_32U
-            frame_count += 1
-
-            target: float = start_time + (frame_count * frame_duration)
-            sleep: float = target - time.perf_counter()
-
-            if sleep > 0:
-                await asyncio.sleep(sleep)
-            elif sleep < -0.020:
-                logger.debug(f"Frame {frame_count} is {-sleep:.3f}s behind schedule")
-        
-        if self._skip.is_set() and not self._ended.is_set():
-            self._track_completed = False
-
-        await self._send_silence()
-        await self._connection._gateway.set_speaking(False, self._priority)
-
-        return self._track_completed
-
-    async def _player_loop(self) -> None:
-        while True:
-            source: AudioSource = None
-            origin: AudioBeginOrigin = AudioBeginOrigin.PLAY
-
-            async with self._lock:
-                if self._priority_source:
-                    source = self._priority_source
-                    self._priority_source = None
-                elif self._queue:
-                    audio: QueuedAudio = self._queue.popleft()
-                    source = audio.source
-                    origin = audio.origin
-                else:
-                    self._current = None
-                    self._player_task = None
-
-                    await self._store.clear()
-                    return
+            await self._connection._client._ffmpeg.submit(source, self._connection)
+            await self._store.wait()
             
-                self._current = source
+            self._set_state(AudioPlaybackState.PLAYING)
+            await self._connection._gateway.set_speaking(True, self._priority)
             
-            await self._store.clear()
+            self._connection._client._event_factory.emit(
+                WaveEventType.AUDIO_BEGIN,
+                self._connection._channel_id,
+                self._connection._guild_id,
+                source,
+                origin,
+            )
 
-            completed: bool = await self._play_internal(source, origin)
+            frame_duration: float = Audio.FRAME_LENGTH / 1000
+            frame_count: int = 0
+            start_time: float = time.perf_counter()
 
-            async with self._lock:
-                self._connection._client._event_factory.emit(
-                    WaveEventType.AUDIO_END,
-                    self._connection._channel_id,
-                    self._connection._guild_id,
-                    self._current,
+            while not self._stop_event.is_set() and not self._skip_event.is_set():
+                resume_task: asyncio.Task[None] = asyncio.create_task(self._resume_event.wait())
+                skip_task: asyncio.Task[None] = asyncio.create_task(self._skip_event.wait())
+                stop_task: asyncio.Task[None] = asyncio.create_task(self._stop_event.wait())
+
+                _, pending = await asyncio.wait(
+                    {resume_task, skip_task, stop_task},
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
 
-                if completed or (self._skip.is_set() and not self._ended.is_set()):
-                    self._history.append(source)
+                for task in pending:
+                    task.cancel()
+
+                if self._stop_event.is_set():
+                    completed = False
+                    return False
+                
+                if self._skip_event.is_set():
+                    completed = False
+                    return False
+
+                if not self._resume_event.is_set():
+                    self._set_state(AudioPlaybackState.PAUSED)
+                    await self._send_silence()
+                    continue
+
+                opus: bytes = await self._store.fetch_frame()
+                if opus is None:
+                    completed = True
+                    return True
+
+                header: bytes = self._generate_rtp()
+                encrypted: bytes = self._connection._mode(
+                    self._connection._secret,
+                    self._nonce,
+                    header,
+                    opus
+                )
+                await self._connection._server.send(encrypted)
+
+                self._sequence = (self._sequence + 1) % Audio.BIT_16U
+                self._timestamp = (self._timestamp + Audio.SAMPLES_PER_FRAME) % Audio.BIT_32U
+                
+                frame_count += 1
+                target: float = start_time + (frame_count * frame_duration)
+                sleep: float = target - time.perf_counter()
+
+                if sleep > 0:
+                    await asyncio.sleep(sleep)
+                elif sleep < -0.020:
+                    logger.debug(f"Frame {frame_count} is {-sleep:.3f}s behind schedule")
+        finally:
+            if self._state == AudioPlaybackState.BUFFERING:
+                self._set_state(AudioPlaybackState.IDLE)
+        
+        return completed
+
+    async def _player_loop(self) -> None:
+        try:
+            while True:
+                self._set_state(AudioPlaybackState.BUFFERING)
+
+                async with self._lock:
+                    if self._priority_source:
+                        source = self._priority_source
+                        origin = AudioBeginOrigin.PLAY
+                        self._priority_source = None
+                    elif self._queue:
+                        queued: QueuedAudio = self._queue.popleft()
+                        source = queued.source
+                        origin = queued.origin
+                    else:
+                        self._current = None
+                        self._set_state(AudioPlaybackState.IDLE)
+
+                        return
+                
+                    self._current = source
+                
+                await self._store.clear()
+                completed: bool = await self._play_internal(source, origin)
+
+                async with self._lock:
+                    self._set_state(AudioPlaybackState.STOPPING)
+
+                    if completed:
+                        self._history.append(source)
+
+                    ended: AudioSource = self._current
+                    self._current = None
+                    self._set_state(AudioPlaybackState.IDLE)
+
+                    self._connection._client._event_factory.emit(
+                        WaveEventType.AUDIO_END,
+                        self._connection._channel_id,
+                        self._connection._guild_id,
+                        self._current,
+                    )
+        except asyncio.CancelledError:
+            pass
 
     async def _send_silence(self) -> None:
         send: Callable[[bytes], Coroutine[Any, Any, None]] = self._connection._server.send
         for _ in range(5):
             await send(b"\xF8\xFF\xFE")
+
+    def _set_state(self, state: AudioPlaybackState) -> None:
+        if state not in _VALID_TRANSITIONS[self._state]:
+            error: str = f"Invalid state transition: {self._state.name} -> {state.name}"
+            raise RuntimeError(error)
+        
+        self._state = state
 
     async def add_queue(self, source: AudioSource) -> Result:
         """
@@ -258,7 +321,7 @@ class AudioPlayer:
     @property
     def is_playing(self) -> bool:
         """If the player has audio currently playing."""
-        return self._current is not None and self._resumed.is_set()
+        return self._state == AudioPlaybackState.PLAYING
 
     async def next(self) -> Result:
         """
@@ -277,8 +340,8 @@ class AudioPlayer:
             if len(self._queue) < 1:
                 return Result.failed(ResultReason.EMPTY_QUEUE)
 
-            self._skip.set()
-            self._resumed.set()
+            self._skip_event.set()
+            self._resume_event.set()
         
         return Result.succeeded()
 
@@ -295,10 +358,11 @@ class AudioPlayer:
         if self._current is None:
             return Result.failed(ResultReason.NO_TRACK)
 
-        if not self._resumed.is_set():
+        if not self._resume_event.is_set():
             return Result.failed(ResultReason.PAUSED)
 
-        self._resumed.clear()
+        self._resume_event.clear()
+        self._set_state(AudioPlaybackState.PAUSED)
 
         await self._connection._gateway.set_speaking(False, self._priority)
         
@@ -332,7 +396,7 @@ class AudioPlayer:
             self._priority_source = source
 
             if self._current is not None:
-                self._skip.set()
+                self._skip_event.set()
 
             if not self._player_task or self._player_task.done():
                 self._player_task = asyncio.create_task(self._player_loop())
@@ -357,8 +421,8 @@ class AudioPlayer:
             self._queue.appendleft(QueuedAudio(previous, AudioBeginOrigin.HISTORY))
 
             if self._current:
-                self._skip.set()
-                self._resumed.set()
+                self._skip_event.set()
+                self._resume_event.set()
             
         return Result.succeeded()
 
@@ -418,12 +482,13 @@ class AudioPlayer:
             If the operation was successful, with reason provided if otherwise.
         """
         
-        if self._resumed.is_set():
+        if self._resume_event.is_set():
             return Result.failed(ResultReason.PLAYING)
 
         await self._connection._gateway.set_speaking(True, self._priority)
         
-        self._resumed.set()
+        self._resume_event.set()
+        self._set_state(AudioPlaybackState.PLAYING)
         return Result.succeeded()
 
     def set_priority(self, priority: bool) -> None:
@@ -490,6 +555,11 @@ class AudioPlayer:
         
         return Result.succeeded()
 
+    @property
+    def state(self) -> AudioPlaybackState:
+        """The current state of this player."""
+        return self._state
+
     async def stop(self) -> Result:
         """
         Stop the current audio.
@@ -500,9 +570,9 @@ class AudioPlayer:
             If the operation was successful, with reason provided if otherwise.
         """
         
-        self._ended.set()
-        self._skip.set()
-        self._resumed.set()
+        self._stop_event.set()
+        self._skip_event.set()
+        self._resume_event.set()
 
         async with self._lock:
             self._queue.clear()
