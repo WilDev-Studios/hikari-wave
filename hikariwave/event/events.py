@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from hikariwave.audio.source import AudioSource
-from hikariwave.event.types import VoiceWarningType
+from hikariwave.event.types import AudioBeginOrigin, VoiceWarningType
 
 import hikari
 
@@ -48,6 +48,8 @@ class AudioBeginEvent(WaveEvent):
     """The ID of the guild the channel is in."""
     audio: AudioSource
     """The audio that is playing."""
+    origin: AudioBeginOrigin
+    """The origin from which this audio is being played."""
 
     @classmethod
     def _create(
@@ -55,11 +57,13 @@ class AudioBeginEvent(WaveEvent):
         channel_id: hikari.Snowflake,
         guild_id: hikari.Snowflake,
         audio: AudioSource,
+        origin: AudioBeginOrigin,
     ) -> AudioBeginEvent:
         self = object.__new__(cls)
         object.__setattr__(self, "channel_id", channel_id)
         object.__setattr__(self, "guild_id", guild_id)
         object.__setattr__(self, "audio", audio)
+        object.__setattr__(self, "origin", origin)
         return self
 
 @dataclass(frozen=True, slots=True)

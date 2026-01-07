@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import dataclass
 from hikariwave.audio.source import AudioSource
 from hikariwave.audio.store import FrameStore
-from hikariwave.event.types import WaveEventType
+from hikariwave.event.types import AudioBeginOrigin, WaveEventType
 from hikariwave.internal.constants import Audio
 from hikariwave.internal.result import Result, ResultReason
 from typing import Any, Callable, Coroutine, TYPE_CHECKING
@@ -20,6 +21,15 @@ if TYPE_CHECKING:
 __all__ = ("AudioPlayer",)
 
 logger: logging.Logger = logging.getLogger("hikariwave.player")
+
+@dataclass(frozen=True, slots=True)
+class QueuedAudio:
+    """Audio metadata in player queue."""
+
+    source: AudioSource
+    """The audio source to play from."""
+    origin: AudioBeginOrigin
+    """The beginning origin of this audio."""
 
 class AudioPlayer:
     """Responsible for all audio."""
@@ -53,7 +63,7 @@ class AudioPlayer:
         self._timestamp: int = 0
         self._nonce: int = 0
 
-        self._queue: deque[AudioSource] = deque(maxlen=self._connection._config.max_queue)
+        self._queue: deque[QueuedAudio] = deque(maxlen=self._connection._config.max_queue)
         self._history: deque[AudioSource] = deque(maxlen=self._connection._config.max_history)
         self._priority_source: AudioSource = None
         self._current: AudioSource = None
@@ -75,7 +85,7 @@ class AudioPlayer:
 
         return bytes(header)
 
-    async def _play_internal(self, source: AudioSource) -> bool:
+    async def _play_internal(self, source: AudioSource, origin: AudioBeginOrigin) -> bool:
         self._ended.clear()
         self._skip.clear()
         self._track_completed = False
@@ -92,6 +102,7 @@ class AudioPlayer:
             self._connection._channel_id,
             self._connection._guild_id,
             source,
+            origin,
         )
 
         frame_duration: float = Audio.FRAME_LENGTH / 1000
@@ -139,13 +150,16 @@ class AudioPlayer:
     async def _player_loop(self) -> None:
         while True:
             source: AudioSource = None
+            origin: AudioBeginOrigin = AudioBeginOrigin.PLAY
 
             async with self._lock:
                 if self._priority_source:
                     source = self._priority_source
                     self._priority_source = None
                 elif self._queue:
-                    source = self._queue.popleft()
+                    audio: QueuedAudio = self._queue.popleft()
+                    source = audio.source
+                    origin = audio.origin
                 else:
                     self._current = None
                     self._player_task = None
@@ -157,7 +171,7 @@ class AudioPlayer:
             
             await self._store.clear()
 
-            completed: bool = await self._play_internal(source)
+            completed: bool = await self._play_internal(source, origin)
 
             async with self._lock:
                 self._connection._client._event_factory.emit(
@@ -200,7 +214,7 @@ class AudioPlayer:
             raise TypeError(error)
 
         async with self._lock:
-            self._queue.append(source)
+            self._queue.append(QueuedAudio(source, AudioBeginOrigin.QUEUE))
 
             if not self._player_task or self._player_task.done():
                 self._player_task = asyncio.create_task(self._player_loop())
@@ -340,7 +354,7 @@ class AudioPlayer:
                 return Result.failed(ResultReason.EMPTY_HISTORY)
             
             previous: AudioSource = self._history.pop()
-            self._queue.appendleft(previous)
+            self._queue.appendleft(QueuedAudio(previous, AudioBeginOrigin.HISTORY))
 
             if self._current:
                 self._skip.set()
@@ -352,7 +366,7 @@ class AudioPlayer:
     def queue(self) -> list[AudioSource]:
         """Get all audio currently in queue."""
 
-        return list(self._queue)
+        return [audio.source for audio in self._queue]
 
     async def remove_queue(self, source: AudioSource) -> Result:
         """
@@ -379,9 +393,17 @@ class AudioPlayer:
             raise TypeError(error)
 
         async with self._lock:
-            try:
-                self._queue.remove(source)
-            except ValueError:
+            found: bool = False
+
+            for audio in self._queue:
+                if audio.source != source:
+                    continue
+
+                self._queue.remove(audio)
+                found = True
+                break
+
+            if not found:
                 return Result.failed(ResultReason.NOT_FOUND)
         
         return Result.succeeded()
@@ -461,7 +483,7 @@ class AudioPlayer:
             if len(self._queue) < 1:
                 return Result.failed(ResultReason.EMPTY_QUEUE)
             
-            temp: list[AudioSource] = list(self._queue)
+            temp: list[QueuedAudio] = list(self._queue)
             random.shuffle(temp)
             self._queue.clear()
             self._queue.extend(temp)
