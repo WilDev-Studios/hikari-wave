@@ -149,7 +149,15 @@ class BufferAudioSource(AudioSource):
         return self._content
 
 class FileAudioSource(AudioSource):
-    """File audio source implementation."""
+    """
+    File audio source implementation.
+    
+    Warning
+    -------
+    This source is intended primarily for testing, development, and simple use cases.
+    For production, URL-based or other sources are recommended.
+    Some fields and properties cannot be reliably retrieved without excessive dependencies.
+    """
 
     __slots__ = (
         "_content",
@@ -184,6 +192,12 @@ class FileAudioSource(AudioSource):
         volume : float | str | None
             If provided, overrides the player's set/default volume. Can be scaled (`0.5`, `1.0`, `2.0`, etc.) or dB-based (`-3dB`, etc.).
         
+        Warning
+        -------
+        This source is intended primarily for testing, development, and simple use cases.
+        For production, URL-based or other sources are recommended.
+        Some fields and properties cannot be reliably retrieved without excessive dependencies.
+
         Raises
         ------
         TypeError
