@@ -143,27 +143,8 @@ class AudioPlayer:
             start_time: float = time.perf_counter()
 
             while not self._stop_event.is_set() and not self._skip_event.is_set():
-                resume_task: asyncio.Task[None] = asyncio.create_task(self._resume_event.wait())
-                skip_task: asyncio.Task[None] = asyncio.create_task(self._skip_event.wait())
-                stop_task: asyncio.Task[None] = asyncio.create_task(self._stop_event.wait())
-
-                _, pending = await asyncio.wait(
-                    {resume_task, skip_task, stop_task},
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-
-                for task in pending:
-                    task.cancel()
-
-                if self._stop_event.is_set():
-                    completed = False
-                    return False
-                
-                if self._skip_event.is_set():
-                    completed = False
-                    return False
-
                 if not self._resume_event.is_set():
+                    await asyncio.sleep(0.01)
                     continue
 
                 opus: bytes = await self._store.fetch_frame()
@@ -182,6 +163,7 @@ class AudioPlayer:
 
                 self._sequence = (self._sequence + 1) % Audio.BIT_16U
                 self._timestamp = (self._timestamp + Audio.SAMPLES_PER_FRAME) % Audio.BIT_32U
+                self._frames += 1
                 
                 target: float = start_time + (self._frames * frame_duration)
                 sleep: float = target - time.perf_counter()
@@ -191,8 +173,6 @@ class AudioPlayer:
                 elif sleep < -0.020:
                     logger.debug(f"Frame {self._frames} is {-sleep:.3f}s behind schedule")
                 
-                self._frames += 1
-
                 elapsed_seconds: int = self._frames // frames_per_second
                 if elapsed_seconds > last_second:
                     last_second = elapsed_seconds
@@ -234,6 +214,7 @@ class AudioPlayer:
                 
                 await self._store.clear()
                 completed: bool = await self._play_internal(source, origin)
+                await self._connection._gateway.set_speaking(False)
 
                 async with self._lock:
                     self._set_state(AudioPlaybackState.STOPPING)
