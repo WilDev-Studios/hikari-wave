@@ -23,6 +23,17 @@ def validate_content(content: object, name: str, expected: tuple[object]) -> typ
 
     return content
 
+def validate_duration(duration: object) -> float:
+    if not isinstance(duration, (float, int)):
+        error: str = "Provided duration must be `float`"
+        raise TypeError(error)
+    
+    if duration <= 0:
+        error: str = "Provided duration must be greater than `0`"
+        raise ValueError(error)
+    
+    return float(duration)
+
 def validate_name(name: object) -> str:
     if not isinstance(name, str):
         error: str = "Provided name must be `str`"
@@ -53,6 +64,11 @@ class AudioSource:
     def channels(self) -> int | None:
         """If provided, the amount of channels this source plays with."""
         return self._channels
+
+    @property
+    def duration(self) -> float | None:
+        """The duration of the source, if provided/found."""
+        return self._duration
 
     @property
     def name(self) -> str | None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from hikariwave.audio.source.base import (
     AudioSource,
     validate_content,
+    validate_duration,
     validate_name,
 )
 from hikariwave.config import (
@@ -28,6 +29,7 @@ class FileAudioSource(AudioSource):
 
     __slots__ = (
         "_content",
+        "_duration",
         "_bitrate",
         "_channels",
         "_name",
@@ -37,6 +39,7 @@ class FileAudioSource(AudioSource):
     def __init__(
         self,
         filepath: str,
+        duration: float | None = None,
         *,
         bitrate: str | None = None,
         channels: int | None = None,
@@ -50,6 +53,8 @@ class FileAudioSource(AudioSource):
         ----------
         filepath : str
             The filepath to the audio file.
+        duration : float | None
+            If provided, the duration of this source - Required if using player timestamp properties/fields.
         bitrate : str | None
             If provided, the bitrate in which to play this source back at.
         channels : int | None
@@ -69,12 +74,14 @@ class FileAudioSource(AudioSource):
         ------
         TypeError
             - If `filepath` is not `str`.
+            - If `duration` is provided and not `float`.
             - If `bitrate` is provided and not `str`.
             - If `channels` is provided and not `int`.
             - If `name` is provided and not `str`.
             - If `volume` is provided and not `float` or `str`.
         ValueError
             - If `filepath` is empty or is not found as a file on the system.
+            - If `duration` is provided and is not greater than `0`.
             - If `bitrate` is provided, and is not between `6k` and `510k`.
             - If `channels` is provided and not `1` or `2`.
             - If `name` is provided and is empty.
@@ -82,6 +89,7 @@ class FileAudioSource(AudioSource):
         """
 
         self._content: str = validate_content(filepath, "filepath", (str,))
+        self._duration: float | None = validate_duration(duration) if duration is not None else None
 
         self._bitrate: str | None = validate_bitrate(bitrate) if bitrate is not None else None
         self._channels: int | None = validate_channels(channels) if channels is not None else None
