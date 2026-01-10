@@ -212,7 +212,7 @@ class Config:
     """Global or per-connection configuration settings."""
 
     __slots__ = (
-        "_bitrate", "_buffer", "_channels", "_max_history", "_max_queue", "_volume",
+        "_bitrate", "_buffer", "_channels", "_max_history", "_max_queue", "_record", "_volume",
     )
 
     def __init__(
@@ -223,6 +223,7 @@ class Config:
         channels: int = 2,
         max_history: int = None,
         max_queue: int = None,
+        record: bool = False,
         volume: float | int | str = 1.0,
     ) -> None:
         """
@@ -240,6 +241,8 @@ class Config:
             If provided, the maximum amount of audio sources recorded in audio player history.
         max_queue : int
             If provided, the maximum amount of audio sources that can be in audio player queues.
+        record : bool
+            If provided, sets if you can collect/handle/record members' voice packets and handle via `MemberSpeechEvent`.
         volume : float | int | str
             If provided, the volume of all audio - Reference FFmpeg volume audio filtering.
         
@@ -251,6 +254,7 @@ class Config:
             - If `channels` is provided and is not `int`.
             - If `max_history` is provided and is not `int`.
             - If `max_queue` is provided and is not `int`.
+            - If `record` is provided and is not `bool`.
             - If `volume` is provided and is not `float`, `int`, or `str`.
         ValueError
             - If `bitrate` is provided and not between `6k` and `510k`.
@@ -281,12 +285,17 @@ class Config:
             if max_queue < 1:
                 error: str = "Provided max_queue must be at least `1`"
                 raise ValueError(error)
+        
+        if record is not None and not isinstance(record, bool):
+            error: str = "Provided record must be `bool`"
+            raise TypeError(error)
 
         self._bitrate: str = validate_bitrate(bitrate)
         self._buffer: BufferConfig = buffer if buffer is not None else BufferConfig()
         self._channels: int = validate_channels(channels)
         self._max_history: int | None = max_history
         self._max_queue: int | None = max_queue
+        self._record: bool = record
         self._volume: float | int | str = validate_volume(volume)
     
     @property
@@ -314,6 +323,11 @@ class Config:
         """If set, the maximum amount of audio sources that can be queued in the audio player."""
         return self._max_queue
     
+    @property
+    def record(self) -> bool:
+        "If you are collecting/handling/recording members' voice packets and handling via `MemberSpeechEvent`."""
+        return self._record
+
     @property
     def volume(self) -> float | int | str:
         """The default volume of all audio sources."""

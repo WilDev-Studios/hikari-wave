@@ -6,7 +6,7 @@ from typing import Callable, TypeAlias
 
 import hikari
 
-__all__ = ("EventFactory",)
+__all__ = ()
 
 EventBuilder: TypeAlias = Callable[[tuple], events.WaveEvent]
 
@@ -34,6 +34,7 @@ class EventFactory:
         for type_, event in {
             WaveEventType.AUDIO_BEGIN: events.AudioBeginEvent,
             WaveEventType.AUDIO_END: events.AudioEndEvent,
+            WaveEventType.AUDIO_SECOND: events.AudioSecondEvent,
             WaveEventType.BOT_JOIN_VOICE: events.BotJoinVoiceEvent,
             WaveEventType.BOT_LEAVE_VOICE: events.BotLeaveVoiceEvent,
             WaveEventType.MEMBER_DEAF: events.MemberDeafEvent,
@@ -41,6 +42,7 @@ class EventFactory:
             WaveEventType.MEMBER_LEAVE_VOICE: events.MemberLeaveVoiceEvent,
             WaveEventType.MEMBER_MOVE_VOICE: events.MemberMoveVoiceEvent,
             WaveEventType.MEMBER_MUTE: events.MemberMuteEvent,
+            WaveEventType.MEMBER_SPEECH: events.MemberSpeechEvent,
             WaveEventType.MEMBER_START_SPEAKING: events.MemberStartSpeakingEvent,
             WaveEventType.MEMBER_STOP_SPEAKING: events.MemberStopSpeakingEvent,
             WaveEventType.VOICE_RECONNECT: events.VoiceReconnectEvent,

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "hikari-wave"
-version = "0.3.0a2"
+dynamic = ["version"]
 description = "A lightweight, native voice implementation for hikari-based Discord bots"
 readme = "README.md"
 requires-python = ">= 3.10,<3.15"
@@ -48,8 +48,18 @@ Repository = "https://github.com/WilDev-Studios/hikari-wave"
 Documentation = "https://hikari-wave.wildevstudios.net/"
 Issues = "https://github.com/WilDev-Studios/hikari-wave/issues"
 
-[tool.setuptools.packages.find]
-include = ["hikariwave*"]
+[tool.hatch.build.targets.wheel]
+packages = ["hikariwave"]
+include = [
+    "hikariwave/py.typed"
+]
 
-[tool.setuptools.package-data]
-hikariwave = ["py.typed"]
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/assets",
+    "/docs",
+    "/tests",
+]
+
+[tool.hatch.version]
+path = "hikariwave/__init__.py"

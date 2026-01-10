@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from hikariwave.audio.source import AudioSource
-from hikariwave.event.types import VoiceWarningType
+from hikariwave.event.types import AudioBeginOrigin, VoiceWarningType
 
 import hikari
 
@@ -11,6 +11,7 @@ __all__ = (
     "WaveEvent",
     "AudioBeginEvent",
     "AudioEndEvent",
+    "AudioSecondEvent",
     "BotJoinVoiceEvent",
     "BotLeaveVoiceEvent",
     "MemberDeafEvent",
@@ -18,6 +19,7 @@ __all__ = (
     "MemberLeaveVoiceEvent",
     "MemberMoveVoiceEvent",
     "MemberMuteEvent",
+    "MemberSpeechEvent",
     "MemberStartSpeakingEvent",
     "MemberStopSpeakingEvent",
     "VoiceReconnectEvent",
@@ -48,6 +50,8 @@ class AudioBeginEvent(WaveEvent):
     """The ID of the guild the channel is in."""
     audio: AudioSource
     """The audio that is playing."""
+    origin: AudioBeginOrigin
+    """The origin from which this audio is being played."""
 
     @classmethod
     def _create(
@@ -55,11 +59,13 @@ class AudioBeginEvent(WaveEvent):
         channel_id: hikari.Snowflake,
         guild_id: hikari.Snowflake,
         audio: AudioSource,
+        origin: AudioBeginOrigin,
     ) -> AudioBeginEvent:
         self = object.__new__(cls)
         object.__setattr__(self, "channel_id", channel_id)
         object.__setattr__(self, "guild_id", guild_id)
         object.__setattr__(self, "audio", audio)
+        object.__setattr__(self, "origin", origin)
         return self
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +90,34 @@ class AudioEndEvent(WaveEvent):
         object.__setattr__(self, "channel_id", channel_id)
         object.__setattr__(self, "guild_id", guild_id)
         object.__setattr__(self, "audio", audio)
+        return self
+
+@dataclass(frozen=True, slots=True)
+class AudioSecondEvent(WaveEvent):
+    """Dispatched when audio progresses by a second."""
+
+    channel_id: hikari.Snowflake
+    """The ID of the channel."""
+    guild_id: hikari.Snowflake
+    """The ID of the guild the channel is in."""
+    audio: AudioSource
+    """The audio that is currently playing."""
+    second: int
+    """The total amount of seconds that have been elapsed."""
+
+    @classmethod
+    def _create(
+        cls,
+        channel_id: hikari.Snowflake,
+        guild_id: hikari.Snowflake,
+        audio: AudioSource,
+        second: int,
+    ) -> AudioSecondEvent:
+        self = object.__new__(cls)
+        object.__setattr__(self, "channel_id", channel_id)
+        object.__setattr__(self, "guild_id", guild_id)
+        object.__setattr__(self, "audio", audio)
+        object.__setattr__(self, "second", second)
         return self
 
 @dataclass(frozen=True, slots=True)
@@ -272,6 +306,34 @@ class MemberMuteEvent(WaveEvent):
         object.__setattr__(self, "guild_id", guild_id)
         object.__setattr__(self, "member", member)
         object.__setattr__(self, "is_mute", mute)
+        return self
+
+@dataclass(frozen=True, slots=True)
+class MemberSpeechEvent(WaveEvent):
+    """Dispatched when a member in a voice channel finishes speaking and you wish to handle their voice packets."""
+
+    channel_id: hikari.Snowflake
+    """The ID of the channel the member is in."""
+    guild_id: hikari.Snowflake
+    """The ID of the guild the channel/member is in."""
+    member: hikari.Member
+    """The member that spoke."""
+    audio: bytes
+    """The Opus audio emitted from this member."""
+
+    @classmethod
+    def _create(
+        cls,
+        channel_id: hikari.Snowflake,
+        guild_id: hikari.Snowflake,
+        member: hikari.Member,
+        audio: bytes,
+    ) -> MemberSpeechEvent:
+        self = object.__new__(cls)
+        object.__setattr__(self, "channel_id", channel_id)
+        object.__setattr__(self, "guild_id", guild_id)
+        object.__setattr__(self, "member", member)
+        object.__setattr__(self, "audio", audio)
         return self
 
 @dataclass(frozen=True, slots=True)

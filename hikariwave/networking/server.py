@@ -3,17 +3,19 @@ from __future__ import annotations
 from hikariwave.internal.constants import Audio
 from hikariwave.event.types import VoiceWarningType, WaveEventType
 from hikariwave.internal.error import ServerError
-from typing import Callable, TYPE_CHECKING
+from typing import Callable, TypeAlias, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from hikariwave.client import VoiceClient, VoiceChannelMeta
+    from hikariwave.client import VoiceChannelMeta, VoiceConnection
 
 import asyncio
 import hikari
 import logging
 import struct
 
-__all__ = ("VoiceServer",)
+__all__ = ()
+
+SSRC: TypeAlias = int
 
 logger: logging.Logger = logging.getLogger("hikari-wave.server")
 
@@ -113,33 +115,35 @@ class VoiceServer:
     """The background server responsible for communicating with Discord's voice servers."""
 
     __slots__ = (
-        "_client", "_ip", "_port", "_ssrc", "_udp", "_last_audio", "_watch_task", "_stats",
+        "_connection", "_ip", "_port", "_ssrc", "_udp", "_last_audio", "_watch_task", "_stats", "_buffers",
     )
 
     def __init__(
         self,
-        client: VoiceClient,
+        connection: VoiceConnection,
     ) -> None:
         """
         Create a new voice server connection.
         
         Parameters
         ----------
-        client : VoiceClient
-            The voice client handling all bot connections and state.
+        connection : VoiceConnection
+            The voice connection handling this server.
         """
         
-        self._client: VoiceClient = client
+        self._connection: VoiceConnection = connection
 
         self._ip: str = None
         self._port: int = None
         self._ssrc: int = None
         self._udp: asyncio.DatagramTransport = None
 
-        self._last_audio: dict[int, float] = {}
+        self._last_audio: dict[SSRC, float] = {}
         self._watch_task: asyncio.Task = None
 
-        self._stats: dict[int, RTPStats] = {}
+        self._stats: dict[SSRC, RTPStats] = {}
+
+        self._buffers: dict[SSRC, list[bytes]] = {}
 
     async def _discover_ip(self) -> tuple[str, int]:
         loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
@@ -176,8 +180,16 @@ class VoiceServer:
         timestamp: int = struct.unpack_from(">I", data, 4)[0]
         ssrc: int = struct.unpack_from(">I", data, 8)[0]
 
-        if ssrc not in self._client._ssrcsr:
+        if ssrc not in self._connection._client._ssrcsr:
             return
+        
+        if self._connection._config._record:
+            opus: bytes = self._connection._decryption_mode(self._connection._secret, data)
+
+            if ssrc in self._buffers:
+                self._buffers[ssrc].append(opus)
+            else:
+                self._buffers[ssrc] = [opus]
 
         now: float = asyncio.get_running_loop().time()
 
@@ -193,13 +205,13 @@ class VoiceServer:
         if not is_new:
             return
         
-        user_id: hikari.Snowflake = self._client._ssrcsr[ssrc]
-        channel_id: hikari.Snowflake = self._client._members[user_id]
+        user_id: hikari.Snowflake = self._connection._client._ssrcsr[ssrc]
+        channel_id: hikari.Snowflake = self._connection._client._members[user_id]
 
-        channel: VoiceChannelMeta = self._client._channels[channel_id]
+        channel: VoiceChannelMeta = self._connection._client._channels[channel_id]
         guild: hikari.Snowflake = channel.guild_id
 
-        self._client._event_factory.emit(
+        self._connection._client._event_factory.emit(
             WaveEventType.MEMBER_START_SPEAKING,
             channel_id,
             guild,
@@ -222,20 +234,29 @@ class VoiceServer:
                     del self._last_audio[ssrc]
                     self._stats.pop(ssrc, None)
 
-                    user_id: hikari.Snowflake = self._client._ssrcsr[ssrc]
-                    channel_id: hikari.Snowflake = self._client._members[user_id]
+                    user_id: hikari.Snowflake = self._connection._client._ssrcsr[ssrc]
+                    channel_id: hikari.Snowflake = self._connection._client._members[user_id]
 
-                    channel: VoiceChannelMeta = self._client._channels[channel_id]
+                    channel: VoiceChannelMeta = self._connection._client._channels[channel_id]
                     guild: hikari.Snowflake = channel.guild_id
+                    member: hikari.Member = channel.members[user_id]
 
                     channel.active.remove(user_id)
 
-                    self._client._event_factory.emit(
+                    self._connection._client._event_factory.emit(
                         WaveEventType.MEMBER_STOP_SPEAKING,
                         channel,
                         guild,
-                        channel.members[user_id],
+                        member,
                     )
+                    if self._connection._config._record:
+                        self._connection._client._event_factory.emit(
+                            WaveEventType.MEMBER_SPEECH,
+                            channel,
+                            guild,
+                            member,
+                            self._buffers.pop(ssrc, []),
+                        )
                 
                 for ssrc, stats in self._stats.items():
                     if stats is None:
@@ -251,12 +272,12 @@ class VoiceServer:
                     guild_id: hikari.Snowflake = None
 
                     if jitter > Audio.MAX_JITTER:
-                        user_id = self._client._ssrcsr[ssrc]
-                        channel_id = self._client._members[user_id]
-                        channel = self._client._channels[channel_id]
+                        user_id = self._connection._client._ssrcsr[ssrc]
+                        channel_id = self._connection._client._members[user_id]
+                        channel = self._connection._client._channels[channel_id]
                         guild_id = channel.guild_id
 
-                        self._client._event_factory.emit(
+                        self._connection._client._event_factory.emit(
                             WaveEventType.VOICE_WARNING,
                             channel_id,
                             guild_id,
@@ -265,12 +286,12 @@ class VoiceServer:
                         )
                     
                     if loss_rate > Audio.MAX_PACKET_LOSS:
-                        user_id = self._client._ssrcsr[ssrc]
-                        channel_id = self._client._members[user_id]
-                        channel = self._client._channels[channel_id]
+                        user_id = self._connection._client._ssrcsr[ssrc]
+                        channel_id = self._connection._client._members[user_id]
+                        channel = self._connection._client._channels[channel_id]
                         guild_id = channel.guild_id
 
-                        self._client._event_factory.emit(
+                        self._connection._client._event_factory.emit(
                             WaveEventType.VOICE_WARNING,
                             channel_id,
                             guild_id,

@@ -11,7 +11,7 @@
 <p align="center"><b>A lightweight, native voice implementation for hikari-based Discord bots</b></p>
 
 <p align="center">
-    <b>Latest:</b> <code>0.3.0a2</code>
+    <b>Latest:</b> <code>0.4.0a1</code>
     &nbsp;|&nbsp;
     <b>Python:</b> <code>3.10+</code>
 </p>
@@ -51,7 +51,7 @@ Create a basic voice client bot:
 import hikari
 
 bot = hikari.GatewayBot("TOKEN")
-client = hikariwave.VoiceClient(bot)
+voice = hikariwave.VoiceClient(bot)
 
 bot.run()
 ```

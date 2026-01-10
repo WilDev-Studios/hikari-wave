@@ -17,7 +17,7 @@ import websockets
 if TYPE_CHECKING:
     from hikariwave.connection import VoiceConnection
 
-__all__ = ("VoiceGateway",)
+__all__ = ()
 
 logger: logging.Logger = logging.getLogger("hikari-wave.gateway")
 
@@ -134,7 +134,6 @@ class VoiceGateway:
                 "seq_ack": seq_ack,
             }
         })
-        logger.debug(f"Heartbeat: T={t}, SeqAck={seq_ack}")
 
     async def _loop_heartbeat(self, interval: float) -> None:
         while True:

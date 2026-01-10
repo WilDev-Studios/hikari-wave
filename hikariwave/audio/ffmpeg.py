@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 logger: logging.Logger = logging.getLogger("hikari-wave.ffmpeg")
 
-__all__ = ("FFmpegPool", "FFmpegWorker",)
+__all__ = ()
 
 class FFmpegWorker:
     """Manages a single FFmpeg process when requested."""

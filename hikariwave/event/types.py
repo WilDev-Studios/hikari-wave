@@ -3,9 +3,19 @@ from __future__ import annotations
 from enum import auto, IntEnum
 
 __all__ = (
+    "AudioBeginOrigin",
     "VoiceWarningType",
-    "WaveEventType",
 )
+
+class AudioBeginOrigin(IntEnum):
+    """The origin of an `AudioBeginEvent`."""
+
+    HISTORY = auto()
+    """Audio playing from player history."""
+    PLAY = auto()
+    """Audio playing from a direct call, i.e. `play()`."""
+    QUEUE = auto()
+    """Audio playing from player queue."""
 
 class VoiceWarningType(IntEnum):
     """A type of voice warning."""
@@ -24,6 +34,8 @@ class WaveEventType(IntEnum):
     """When audio begins playing."""
     AUDIO_END             = auto()
     """When audio stops playing."""
+    AUDIO_SECOND          = auto()
+    """When audio advances by a second."""
     BOT_JOIN_VOICE        = auto()
     """When the bot joins a channel."""
     BOT_LEAVE_VOICE       = auto()
@@ -38,6 +50,8 @@ class WaveEventType(IntEnum):
     """When a member moves channels."""
     MEMBER_MUTE           = auto()
     """When a member mutes/unmutes."""
+    MEMBER_SPEECH         = auto()
+    """When a member finishes speaking and you wish to handle the audio."""
     MEMBER_START_SPEAKING = auto()
     """When a member starts speaking."""
     MEMBER_STOP_SPEAKING  = auto()
