@@ -36,7 +36,8 @@ class VoiceConnection:
 
     __slots__ = (
         "_client", "_guild_id", "_channel_id", "_endpoint", "_session_id", "_token", "_config",
-        "_server", "_gateway", "_ready", "_state", "_ssrc", "_mode", "_secret", "_player",
+        "_server", "_gateway", "_ready", "_state", "_ssrc", "_encryption_mode", "_decryption_mode",
+        "_secret", "_player",
     )
 
     def __init__(
@@ -75,7 +76,7 @@ class VoiceConnection:
         self._token: str = token
         self._config: Config = self._client._config
 
-        self._server: VoiceServer = VoiceServer(self._client)
+        self._server: VoiceServer = VoiceServer(self)
         self._gateway: VoiceGateway = VoiceGateway(
             self,
             self._guild_id,
@@ -90,7 +91,8 @@ class VoiceConnection:
         self._state: ConnectionStatus = ConnectionStatus.NEW
 
         self._ssrc: int = None
-        self._mode: Callable[[bytes, int, bytes, bytes], bytes] = None
+        self._encryption_mode: Callable[[bytes, int, bytes, bytes], bytes] = None
+        self._decryption_mode: Callable[[bytes, bytes], bytes] = None
         self._secret: bytes = None
 
         self._player: AudioPlayer = AudioPlayer(self)
@@ -132,13 +134,9 @@ class VoiceConnection:
     async def _gateway_ready(self, payload: ReadyPayload) -> None:
         self._ssrc = payload.ssrc
         
-        supported_modes: list[str] = payload.modes
         chosen_mode: str = None
-        for mode in supported_modes:
+        for mode in payload.modes:
             if mode not in Encrypt.SUPPORTED:
-                continue
-
-            if not hasattr(Encrypt, mode):
                 continue
 
             chosen_mode = mode
@@ -165,7 +163,7 @@ class VoiceConnection:
         await self._server.disconnect()
         await self._gateway.disconnect()
 
-        self._server = VoiceServer(self._client)
+        self._server = VoiceServer(self)
         self._gateway = VoiceGateway(
             self,
             self._guild_id,
@@ -185,13 +183,14 @@ class VoiceConnection:
         )
 
     async def _gateway_session_description(self, payload: SessionDescriptionPayload) -> None:
-        self._mode = getattr(Encrypt, payload.mode)
+        self._encryption_mode = getattr(Encrypt, f"encrypt_{payload.mode}")
+        self._decryption_mode = getattr(Encrypt, f"decrypt_{payload.mode}")
         self._secret = payload.secret
         self._state = ConnectionStatus.CONNECTED
 
         self._ready.set()
 
-        if not self._player._resumed.is_set() and self._player._current:
+        if not self._player._resume_event.is_set() and self._player._current:
             await self._player.resume()
 
     async def _server_update(self, event: hikari.VoiceServerUpdateEvent) -> None:

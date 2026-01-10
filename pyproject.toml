@@ -54,5 +54,12 @@ include = [
     "hikariwave/py.typed"
 ]
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/assets",
+    "/docs",
+    "/tests",
+]
+
 [tool.hatch.version]
 path = "hikariwave/__init__.py"

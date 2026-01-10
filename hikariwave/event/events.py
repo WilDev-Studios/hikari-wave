@@ -19,6 +19,7 @@ __all__ = (
     "MemberLeaveVoiceEvent",
     "MemberMoveVoiceEvent",
     "MemberMuteEvent",
+    "MemberSpeechEvent",
     "MemberStartSpeakingEvent",
     "MemberStopSpeakingEvent",
     "VoiceReconnectEvent",
@@ -305,6 +306,34 @@ class MemberMuteEvent(WaveEvent):
         object.__setattr__(self, "guild_id", guild_id)
         object.__setattr__(self, "member", member)
         object.__setattr__(self, "is_mute", mute)
+        return self
+
+@dataclass(frozen=True, slots=True)
+class MemberSpeechEvent(WaveEvent):
+    """Dispatched when a member in a voice channel finishes speaking and you wish to handle their voice packets."""
+
+    channel_id: hikari.Snowflake
+    """The ID of the channel the member is in."""
+    guild_id: hikari.Snowflake
+    """The ID of the guild the channel/member is in."""
+    member: hikari.Member
+    """The member that spoke."""
+    audio: bytes
+    """The Opus audio emitted from this member."""
+
+    @classmethod
+    def _create(
+        cls,
+        channel_id: hikari.Snowflake,
+        guild_id: hikari.Snowflake,
+        member: hikari.Member,
+        audio: bytes,
+    ) -> MemberSpeechEvent:
+        self = object.__new__(cls)
+        object.__setattr__(self, "channel_id", channel_id)
+        object.__setattr__(self, "guild_id", guild_id)
+        object.__setattr__(self, "member", member)
+        object.__setattr__(self, "audio", audio)
         return self
 
 @dataclass(frozen=True, slots=True)

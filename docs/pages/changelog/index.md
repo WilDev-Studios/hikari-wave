@@ -17,6 +17,8 @@ For full details, click a specific version.
 - New `AudioSecondEvent`.
 - Websocket debug logs silenced by default.
 - `FileAudioSource` marked as non-production.
+- New `MemberSpeechEvent` dispatched when members are speaking.
+- New `AudioPlayer` `clear_history` method.
 
 [View full changelog ->](0.4.0a1.md)
 

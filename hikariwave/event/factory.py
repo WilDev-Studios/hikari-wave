@@ -42,6 +42,7 @@ class EventFactory:
             WaveEventType.MEMBER_LEAVE_VOICE: events.MemberLeaveVoiceEvent,
             WaveEventType.MEMBER_MOVE_VOICE: events.MemberMoveVoiceEvent,
             WaveEventType.MEMBER_MUTE: events.MemberMuteEvent,
+            WaveEventType.MEMBER_SPEECH: events.MemberSpeechEvent,
             WaveEventType.MEMBER_START_SPEAKING: events.MemberStartSpeakingEvent,
             WaveEventType.MEMBER_STOP_SPEAKING: events.MemberStopSpeakingEvent,
             WaveEventType.VOICE_RECONNECT: events.VoiceReconnectEvent,

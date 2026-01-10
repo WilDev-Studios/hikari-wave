@@ -153,7 +153,7 @@ class AudioPlayer:
                     return True
 
                 header: bytes = self._generate_rtp()
-                encrypted: bytes = self._connection._mode(
+                encrypted: bytes = self._connection._encryption_mode(
                     self._connection._secret,
                     self._nonce,
                     header,
@@ -279,6 +279,24 @@ class AudioPlayer:
         
         return Result.succeeded()
 
+    async def clear_history(self) -> Result:
+        """
+        Clear all audio from history.
+        
+        Returns
+        -------
+        Result
+            If the operation was successful, with reason provided if otherwise.
+        """
+
+        async with self._lock:
+            if len(self._history) < 1:
+                return Result.failed(ResultReason.EMPTY_HISTORY)
+            
+            self._history.clear()
+        
+        return Result.succeeded()
+
     async def clear_queue(self) -> Result:
         """
         Clear all audio from the queue.
@@ -340,8 +358,9 @@ class AudioPlayer:
             if len(self._queue) < 1:
                 return Result.failed(ResultReason.EMPTY_QUEUE)
 
-            self._skip_event.set()
-            self._resume_event.set()
+            if self._current:
+                self._skip_event.set()
+                self._resume_event.set()
         
         return Result.succeeded()
 

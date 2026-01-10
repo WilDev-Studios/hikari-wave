@@ -51,6 +51,8 @@ class WaveEventType(IntEnum):
     """When a member moves channels."""
     MEMBER_MUTE           = auto()
     """When a member mutes/unmutes."""
+    MEMBER_SPEECH         = auto()
+    """When a member finishes speaking and you wish to handle the audio."""
     MEMBER_START_SPEAKING = auto()
     """When a member starts speaking."""
     MEMBER_STOP_SPEAKING  = auto()
