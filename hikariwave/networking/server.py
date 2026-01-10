@@ -13,7 +13,7 @@ import hikari
 import logging
 import struct
 
-__all__ = ("VoiceServer",)
+__all__ = ()
 
 SSRC: TypeAlias = int
 

@@ -6,7 +6,7 @@ from typing import Callable, TypeAlias
 
 import hikari
 
-__all__ = ("EventFactory",)
+__all__ = ()
 
 EventBuilder: TypeAlias = Callable[[tuple], events.WaveEvent]
 

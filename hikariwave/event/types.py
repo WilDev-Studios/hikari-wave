@@ -5,7 +5,6 @@ from enum import auto, IntEnum
 __all__ = (
     "AudioBeginOrigin",
     "VoiceWarningType",
-    "WaveEventType",
 )
 
 class AudioBeginOrigin(IntEnum):

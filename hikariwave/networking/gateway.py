@@ -17,7 +17,7 @@ import websockets
 if TYPE_CHECKING:
     from hikariwave.connection import VoiceConnection
 
-__all__ = ("VoiceGateway",)
+__all__ = ()
 
 logger: logging.Logger = logging.getLogger("hikari-wave.gateway")
 
