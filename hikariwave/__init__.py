@@ -1,12 +1,12 @@
 """
-### hikari-wave: `0.3.0a2`\n
+### hikari-wave: `0.4.0a1`\n
 A lightweight, native voice implementation for `hikari`-based Discord bots.
 
-**Documentation:** https://hikari-wave.wildevstudios.net/en/0.3.0a2\n
+**Documentation:** https://hikari-wave.wildevstudios.net/en/0.4.0a1\n
 **GitHub:** https://github.com/WilDev-Studios/hikari-wave
 """
 
-__version__ = "0.3.0a2"
+__version__ = "0.4.0a1"
 
 def _silence_websockets_debug() -> None:
     import logging

@@ -9,7 +9,7 @@ For full details, click a specific version.
 
 ## 0.4.0 (In Progress)
 
-### 0.4.0a1 (STAGING)
+### 0.4.0a1 (January 10th, 2026)
 
 - New `AudioBeginEvent` `origin` property.
 - New `YouTubeAudioSource` `duration` property.
