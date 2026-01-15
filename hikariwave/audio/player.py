@@ -19,7 +19,10 @@ import time
 if TYPE_CHECKING:
     from hikariwave.connection import VoiceConnection
 
-__all__ = ("AudioPlayer",)
+__all__ = (
+    "AudioPlaybackState",
+    "AudioPlayer",
+)
 
 logger: logging.Logger = logging.getLogger("hikariwave.player")
 
@@ -103,6 +106,15 @@ class AudioPlayer:
         self._resume_event: asyncio.Event = asyncio.Event()
         self._resume_event.set()
 
+    def _add_to_history(self, source: AudioSource) -> None:
+        if not source:
+            return
+        
+        if self._history and self._history[-1] == source:
+            return
+        
+        self._history.append(source)
+
     def _generate_rtp(self) -> bytes:
         header: bytearray = bytearray(12)
         header[0] = 0x80
@@ -136,16 +148,16 @@ class AudioPlayer:
             )
 
             frame_duration: float = Audio.FRAME_LENGTH / 1000
-            frames_per_second: int = round(1 / frame_duration)
+            frames_per_second: int = int(1000 / Audio.FRAME_LENGTH)
             last_second: int = -1
 
-            self._frames: int = 0
             start_time: float = time.perf_counter()
 
             while not self._stop_event.is_set() and not self._skip_event.is_set():
                 if not self._resume_event.is_set():
-                    await asyncio.sleep(0.01)
-                    continue
+                    await self._resume_event.wait()
+
+                    start_time = time.perf_counter() - (self._frames * frame_duration)
 
                 opus: bytes = await self._store.fetch_frame()
                 if opus is None:
@@ -216,11 +228,13 @@ class AudioPlayer:
                 completed: bool = await self._play_internal(source, origin)
                 await self._connection._gateway.set_speaking(False)
 
+                self._frames = 0
+
                 async with self._lock:
                     self._set_state(AudioPlaybackState.STOPPING)
 
                     if completed:
-                        self._history.append(source)
+                        self._add_to_history(self._current)
 
                     ended: AudioSource = self._current
                     self._current = None
@@ -352,15 +366,16 @@ class AudioPlayer:
         """
 
         async with self._lock:
-            if self._current is None:
+            if not self._current:
                 return Result.failed(ResultReason.NO_TRACK)
     
-            if len(self._queue) < 1:
+            if not self._queue:
                 return Result.failed(ResultReason.EMPTY_QUEUE)
 
-            if self._current:
-                self._skip_event.set()
-                self._resume_event.set()
+            self._add_to_history(self._current)
+
+            self._skip_event.set()
+            self._resume_event.set()
         
         return Result.succeeded()
 
@@ -415,7 +430,7 @@ class AudioPlayer:
         async with self._lock:
             self._priority_source = source
 
-            if self._current is not None:
+            if self._current:
                 self._skip_event.set()
 
             if not self._player_task or self._player_task.done():
@@ -434,15 +449,21 @@ class AudioPlayer:
         """
 
         async with self._lock:
-            if len(self._history) < 1:
+            if not self._history:
                 return Result.failed(ResultReason.EMPTY_HISTORY)
             
+            if self._current:
+                self._queue.appendleft(QueuedAudio(self._current, AudioBeginOrigin.QUEUE))
+
             previous: AudioSource = self._history.pop()
             self._queue.appendleft(QueuedAudio(previous, AudioBeginOrigin.HISTORY))
 
             if self._current:
                 self._skip_event.set()
                 self._resume_event.set()
+            
+            if not self._player_task or self._player_task.done():
+                self._player_task = asyncio.create_task(self._player_loop())
             
         return Result.succeeded()
 

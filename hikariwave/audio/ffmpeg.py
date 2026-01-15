@@ -32,18 +32,7 @@ class FFmpegWorker:
 
         self._process: asyncio.subprocess.Process = None
 
-    async def encode(self, source: AudioSource, connection: VoiceConnection) -> None:
-        """
-        Encode an entire audio source and stream each Opus frame into the output.
-        
-        Parameters
-        ----------
-        source : AudioSource
-            The audio source to read and encode.
-        connection : VoiceConnection
-            The active connection requesting this encoding.
-        """
-
+    async def __encode(self, source: AudioSource, connection: VoiceConnection) -> None:
         pipeable: bool = False
         headers: str | None = None
 
@@ -115,7 +104,7 @@ class FFmpegWorker:
                     decoded: str = line.decode("utf-8", "replace").strip()
                     if decoded:
                         output.append(decoded)
-                        logger.warning(f"FFmpeg stderr: {decoded}")
+                        logger.debug(f"FFmpeg stderr: {decoded}")
             except Exception as e:
                 logger.error(f"Error reading stderr: {e}")
             
@@ -161,11 +150,12 @@ class FFmpegWorker:
         
         logger.debug(f"FFmpeg finished in {(time.perf_counter() - start) * 1000:.2f}ms")
 
-        if frame_count == 0 and stderr_output:
-            error: str = "\n".join(stderr_output[-10:])
-            logger.error(f"FFmpeg failed to produce any frames. STDERR:\n{error}")
-            
-            error = f"FFmpeg encoding failed: {error}"
+        if frame_count == 0:
+            if self._process and self._process.returncode is None:
+                self._process.kill()
+                await self._process.wait()
+
+            error: str = "FFmpeg produced no frames"
             raise RuntimeError(error)
         
         await self._process.wait()
@@ -177,6 +167,40 @@ class FFmpegWorker:
         await connection.player._store.store_frame(None)
         await self.stop()
     
+    async def encode(self, source: AudioSource, connection: VoiceConnection) -> None:
+        """
+        Encode an entire audio source and stream each Opus frame into the output.
+        
+        Parameters
+        ----------
+        source : AudioSource
+            The audio source to read and encode.
+        connection : VoiceConnection
+            The active connection requesting this encoding.
+        """
+
+        MAX_RETRIES: int = 3
+        last_error: Exception = None
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                return await self.__encode(source, connection)
+            except RuntimeError as e:
+                last_error = e
+
+                logger.info(f"FFmpeg encode failed (attempt {attempt} / {MAX_RETRIES}).{' Retrying' if attempt < MAX_RETRIES else ''}")
+
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(0.25)
+                    continue
+
+                break
+        
+        logger.error(f"FFmpeg failed after retries; media URL likely expired")
+
+        error: str = "Media URL expired or unavailable. Please regenerate the audio source"
+        raise RuntimeError(error) from last_error
+
     async def stop(self) -> None:
         """
         Stop the internal process.

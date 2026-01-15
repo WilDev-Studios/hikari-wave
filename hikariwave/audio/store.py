@@ -148,11 +148,7 @@ class FrameStore:
         self._chunk_frame_count = 0
         self._chunk_buffer.clear()
 
-        while not self._live_buffer.empty():
-            try:
-                self._live_buffer.get_nowait()
-            except asyncio.QueueEmpty:
-                break
+        self._live_buffer = asyncio.Queue()
 
         if self._connection._config.buffer.mode == BufferMode.DISK:
             while self._disk_queue:

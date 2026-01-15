@@ -7,9 +7,16 @@ For full details, click a specific version.
     If you ever come across an issue during our `alpha`/`beta` stage, **please** notify us ASAP.
     We want to weed out as much issues as possible before our `1.0.0` release.
 
-## 0.4.0 (In Progress)
+## 0.5.0 (In Progress)
 
-### 0.4.0a1 (January 10th, 2026)
+### 0.5.0a1 (STAGING)
+
+- Fixed player history and queue.
+- Fixed player timestamp properties' frame counter.
+
+[View full changelog ->](0.5.0a1.md)
+
+## 0.4.0 (January 10th, 2026)
 
 - New `AudioBeginEvent` `origin` property.
 - New `YouTubeAudioSource` `duration` property.
@@ -20,7 +27,7 @@ For full details, click a specific version.
 - New `MemberSpeechEvent` dispatched when members are speaking.
 - New `AudioPlayer` `clear_history` method.
 
-[View full changelog ->](0.4.0a1.md)
+[View full changelog ->](0.4.0.md)
 
 ## 0.3.0 (December 31st, 2025)
 
