@@ -318,7 +318,7 @@ class MemberSpeechEvent(WaveEvent):
     """The ID of the guild the channel/member is in."""
     member: hikari.Member
     """The member that spoke."""
-    audio: bytes
+    audio: list[bytes]
     """The Opus audio emitted from this member."""
 
     @classmethod
@@ -327,7 +327,7 @@ class MemberSpeechEvent(WaveEvent):
         channel_id: hikari.Snowflake,
         guild_id: hikari.Snowflake,
         member: hikari.Member,
-        audio: bytes,
+        audio: list[bytes],
     ) -> MemberSpeechEvent:
         self = object.__new__(cls)
         object.__setattr__(self, "channel_id", channel_id)

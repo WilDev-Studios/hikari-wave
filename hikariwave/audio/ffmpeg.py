@@ -9,9 +9,9 @@ from hikariwave.audio.source import (
 from typing import TYPE_CHECKING
 
 import asyncio
+import contextlib
 import logging
 import os
-import time
 
 if TYPE_CHECKING:
     from hikariwave.connection import VoiceConnection
@@ -19,6 +19,71 @@ if TYPE_CHECKING:
 logger: logging.Logger = logging.getLogger("hikari-wave.ffmpeg")
 
 __all__ = ()
+
+class _StaleEncode(Exception):...
+
+class FFmpegProcess:
+    """FFmpeg encoder process."""
+
+    __slots__ = ("_process",)
+
+    def __init__(self) -> None:
+        """
+        Create a new FFmpeg process handler.
+        """
+        
+        self._process: asyncio.subprocess.Process = None
+    
+    async def start(self, args: list[str], *, stdin: bool) -> asyncio.subprocess.Process:
+        """
+        Start the internal process.
+        
+        Parameters
+        ----------
+        args : list[str]
+            The arguments to pass to the FFmpeg process.
+        stdin : bool
+            If `STDIN` should be pipeable.
+        
+        Returns
+        -------
+        asyncio.subprocess.Process
+            The internal, active process.
+        """
+
+        self._process = await asyncio.create_subprocess_exec(
+            *args,
+            stdin=asyncio.subprocess.PIPE if stdin else None,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        return self._process
+    
+    async def terminate(self) -> None:
+        """
+        Kill the internal process.
+        """
+
+        if not self._process:
+            return
+        
+        for stream in (self._process.stdin, self._process.stdout, self._process.stderr):
+            if not stream or not hasattr(stream, "_transport"):
+                continue
+
+            with contextlib.suppress(Exception):
+                stream._transport.close()
+        
+        if self._process.returncode is None:
+            self._process.terminate()
+
+            try:
+                await asyncio.wait_for(self._process.wait(), 1.5)
+            except asyncio.TimeoutError:
+                self._process.kill()
+                await self._process.wait()
+        
+        self._process = None
 
 class FFmpegWorker:
     """Manages a single FFmpeg process when requested."""
@@ -30,143 +95,151 @@ class FFmpegWorker:
         Create a new worker.
         """
 
-        self._process: asyncio.subprocess.Process = None
+        self._process: FFmpegProcess = FFmpegProcess()
 
-    async def __encode(self, source: AudioSource, connection: VoiceConnection) -> None:
-        pipeable: bool = False
-        headers: str | None = None
-
-        if isinstance(source, BufferAudioSource):
-            content: bytearray | bytes | memoryview = source._content
-            pipeable = True
-        elif isinstance(source, YouTubeAudioSource):
-            content: str = await source.wait_for_url()
-
-            if source._headers:
-                headers = YouTubeAudioSource._format_headers(source._headers)
-        elif isinstance(source, AudioSource):
-            content: str = source._content
-        else:
-            error: str = f"Provided audio source doesn't inherit AudioSource"
-            raise TypeError(error)
-
-        bitrate: str = source._bitrate or connection._config.bitrate
-        channels: int = source._channels or connection._config.channels
-        volume: float | str = source._volume or connection._config.volume
-
-        args: list[str] = [
-            "ffmpeg",
-            "-loglevel", "warning",
-        ]
-
-        if headers:
-            args.extend(["-headers", headers])
-
-        args.extend([
-            "-i", "pipe:0" if pipeable else content,
-            "-map", "0:a",
-            "-af", f"volume={volume}",
-            "-acodec", "libopus",
-            "-f", "opus",
-            "-ar", str(Audio.SAMPLING_RATE),
-            "-ac", str(channels),
-            "-b:a", bitrate,
-            "-application", "audio",
-            "-frame_duration", str(Audio.FRAME_LENGTH),
-            "pipe:1",
-        ])
-
-        self._process = await asyncio.create_subprocess_exec(
-            *args,
-            stdin=asyncio.subprocess.PIPE if pipeable else None,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        if pipeable:
-            try:
-                self._process.stdin.write(content)
-                await self._process.stdin.drain()
-                self._process.stdin.close()
-                await self._process.stdin.wait_closed()
-            except Exception as e:
-                logger.error(f"FFmpeg encode error: {e}")
-        
-        async def read_stderr() -> list[str]:
-            output: list[str] = []
-
-            try:
-                while True:
-                    line: bytes = await self._process.stderr.readline()
-                    if not line:
-                        break
-
-                    decoded: str = line.decode("utf-8", "replace").strip()
-                    if decoded:
-                        output.append(decoded)
-                        logger.debug(f"FFmpeg stderr: {decoded}")
-            except Exception as e:
-                logger.error(f"Error reading stderr: {e}")
-            
-            return output
-
-        stderr_task: asyncio.Task[list[str]] = asyncio.create_task(read_stderr())
-
-        start: float = time.perf_counter()
-        frame_count: int = 0
+    async def _encode(self, source: AudioSource, connection: VoiceConnection) -> None:
         try:
-            while True:
-                try:
-                    header: bytes = await self._process.stdout.readexactly(27)
-                    if not header.startswith(b"OggS"):
-                        return None
-                    
-                    segments_count: int = header[26]
-                    segment_table: bytes = await self._process.stdout.readexactly(segments_count)
+            generation: int = connection._player._store._generation
 
-                    current_packet: bytearray = bytearray()
-                    for lacing_value in segment_table:
-                        data: bytes = await self._process.stdout.readexactly(lacing_value)
-                        current_packet.extend(data)
+            pipeable: bool = isinstance(source, BufferAudioSource)
+            headers: str | None = None
 
-                        if lacing_value < 255:
-                            packet_bytes: bytes = bytes(current_packet)
+            if isinstance(source, BufferAudioSource):
+                content: bytearray | bytes | memoryview = source._content
+            elif isinstance(source, YouTubeAudioSource):
+                content: str = await source.resolve_media()
 
-                            if not (
-                                packet_bytes.startswith(b"OpusHead") or
-                                packet_bytes.startswith(b"OpusTags")
-                            ):
-                                await connection.player._store.store_frame(packet_bytes)
-                                frame_count += 1
-                            
-                            current_packet.clear()
-                except asyncio.IncompleteReadError:
-                    break
-        except Exception as e:
-            logger.error(f"FFmpeg processing error: {e}")
+                if source._headers:
+                    headers = "".join(f"{k}: {v}\r\n" for k, v in source._headers.items())
+            elif isinstance(source, AudioSource):
+                content: str = getattr(source, "_content")
+
+            bitrate: str = source._bitrate or connection._config.bitrate
+            channels: int = source._channels or connection._config.channels
+            volume: float | str = source._volume or connection._config.volume
+
+            args: list[str] = [
+                "ffmpeg",
+                "-loglevel", "warning",
+            ]
+
+            if headers:
+                args.extend(["-headers", headers])
+
+            args.extend([
+                "-i", "pipe:0" if pipeable else content,
+                "-map", "0:a",
+                "-af", f"volume={volume}",
+                "-acodec", "libopus",
+                "-f", "opus",
+                "-ar", str(Audio.SAMPLING_RATE),
+                "-ac", str(channels),
+                "-b:a", bitrate,
+                "-application", "audio",
+                "-frame_duration", str(Audio.FRAME_LENGTH),
+                "pipe:1",
+            ])
+
+            process: asyncio.subprocess.Process = await self._process.start(args, stdin=pipeable)
+            stdin_task: asyncio.Task[None] = None
+
+            if pipeable:
+                stdin_task = asyncio.create_task(self._write_stdin(process.stdin, content))
+            
+            stderr_task: asyncio.Task[None] = asyncio.create_task(self._drain_stderr(process.stderr))
+
+            try:
+                await self._read_frames(process.stdout, connection, generation)
+            except _StaleEncode:
+                logger.debug(f"FFmpeg encode became stale; terminating process...")
+                await self._process.terminate()
+                return
+
+            if stdin_task:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await stdin_task
+            
+            stderr_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await stderr_task
+            
+            if generation == connection._player._store._generation:
+                await connection._player._store.store_frame(None, generation)
+            
+            await self._process.terminate()
+        except asyncio.CancelledError:
+            logger.debug("FFmpeg encode cancelled; terminating process")
+
+            if stdin_task:
+                stdin_task.cancel()
+            
+            stderr_task.cancel()
+
+            await self._process.terminate()
             raise
 
-        stderr_output: list[str] = await stderr_task
+    async def _drain_stderr(self, stderr: asyncio.StreamReader) -> None:
+        while await stderr.readline():
+            pass
+
+    async def _flush_frames(self, frames: list[bytes], connection: VoiceConnection, generation: int) -> None:
+        for frame in frames:
+            stored: bool = await connection._player._store.store_frame(frame, generation)
+
+            if not stored:
+                raise _StaleEncode()
+
+    async def _read_frames(self, stdout: asyncio.StreamReader, connection: VoiceConnection, generation: int) -> None:
+        frames: list[bytes] = []
+        BATCH_SIZE: int = 50
+
+        while True:
+            if generation != connection._player._store._generation:
+                raise _StaleEncode()
+            
+            try:
+                header: bytes = await stdout.readexactly(27)
+                if not header.startswith(b"OggS"):
+                    break
+
+                segments: bytes = header[26]
+                lacing: bytes = await stdout.readexactly(segments)
+
+                packet: bytearray = bytearray()
+                for size in lacing:
+                    packet.extend(await stdout.readexactly(size))
+
+                    if size >= 255:
+                        continue
+
+                    if packet.startswith(b"OpusHead") or packet.startswith(b"OpusTags"):
+                        continue
+
+                    frames.append(bytes(packet))
+
+                    if len(frames) >= BATCH_SIZE:
+                        await self._flush_frames(frames, connection, generation)
+                        frames.clear()
+                    
+                    packet.clear()
+            except asyncio.IncompleteReadError:
+                break
         
-        logger.debug(f"FFmpeg finished in {(time.perf_counter() - start) * 1000:.2f}ms")
+        if frames:
+            await self._flush_frames(frames, connection, generation)
 
-        if frame_count == 0:
-            if self._process and self._process.returncode is None:
-                self._process.kill()
-                await self._process.wait()
+    async def _write_stdin(self, stdin: asyncio.StreamWriter, content: bytes) -> None:
+        CHUNK_SIZE: int = 65536
+        for i in range(0, len(content), CHUNK_SIZE):
+            stdin.write(content[i:i + CHUNK_SIZE])
 
-            error: str = "FFmpeg produced no frames"
-            raise RuntimeError(error)
+            if i % (CHUNK_SIZE * 10) == 0:
+                await stdin.drain()
         
-        await self._process.wait()
-        if self._process.returncode != 0:
-            error_msg: str = "\n".join(stderr_output[-10:]) if stderr_output else "No error output"
-            error: str = f"FFmpeg exited with code {self._process.returncode}: {error_msg}"
-            raise RuntimeError(error)
+        await stdin.drain()
+        stdin.close()
+        await stdin.wait_closed()
 
-        await connection.player._store.store_frame(None)
-        await self.stop()
-    
     async def encode(self, source: AudioSource, connection: VoiceConnection) -> None:
         """
         Encode an entire audio source and stream each Opus frame into the output.
@@ -184,14 +257,17 @@ class FFmpegWorker:
 
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                return await self.__encode(source, connection)
+                if attempt == MAX_RETRIES and isinstance(source, YouTubeAudioSource):
+                    await source.resolve_media(True)
+                    
+                return await self._encode(source, connection)
             except RuntimeError as e:
                 last_error = e
 
-                logger.info(f"FFmpeg encode failed (attempt {attempt} / {MAX_RETRIES}).{' Retrying' if attempt < MAX_RETRIES else ''}")
+                logger.debug(f"FFmpeg encode failed (attempt {attempt} / {MAX_RETRIES}).{' Retrying' if attempt < MAX_RETRIES else ''}")
 
                 if attempt < MAX_RETRIES:
-                    await asyncio.sleep(0.25)
+                    await asyncio.sleep(0.5)
                     continue
 
                 break
@@ -206,27 +282,10 @@ class FFmpegWorker:
         Stop the internal process.
         """
         
-        if not self._process:
-            return
-        
-        for stream in (self._process.stdin, self._process.stdout, self._process.stderr):
-            if stream and hasattr(stream, "_transport"):
-                try:
-                    stream._transport.close()
-                except:
-                    pass
-        
-        if self._process.returncode is None:
-            try:
-                self._process.kill()
-                await self._process.wait()
-            except ProcessLookupError:
-                pass
-
-        self._process = None
+        await self._process.terminate()
 
 class FFmpegPool:
-    """Manages all FFmpeg processes and deploys them when needed."""
+    """Manages all FFmpeg workers and deploys them when needed."""
 
     __slots__ = (
         "_enabled", 
@@ -280,6 +339,8 @@ class FFmpegPool:
         async def _run() -> None:
             try:
                 await worker.encode(source, connection)
+            except Exception:
+                pass
             finally:
                 self._unavailable.remove(worker)
 
@@ -288,8 +349,10 @@ class FFmpegPool:
                 else:
                     await self._available.put(worker)
 
-        asyncio.create_task(_run())
-    
+        encoder: asyncio.Task[None] = asyncio.create_task(_run())
+        connection._player._encoders.add(encoder)
+        encoder.add_done_callback(connection._player._encoders.discard)
+
     async def stop(self) -> None:
         """
         Stop future scheduling and terminate every worker process.

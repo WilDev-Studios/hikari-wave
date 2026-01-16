@@ -11,10 +11,17 @@ For full details, click a specific version.
 
 ### 0.5.0a1 (STAGING)
 
-- Fixed player history and queue.
-- Fixed player timestamp properties' frame counter.
+- New `utils` module with `YouTube` UX methods.
+- New `autoplay` parameter to player `add_queue` method.
+- Replaced `future` and `wait_for_url` with `resolve_metadata` and `resolve_media` in `YouTubeAudioSource`.
+- Generic performance improvements and refactors.
+- Player history, queue, timing, and resume logic fixed.
+- Player can now play previous audio automatically if `IDLE`.
+- FFmpeg zombie processes and buffer leaks fixed.
 
 [View full changelog ->](0.5.0a1.md)
+
+!!! warning "Contains breaking changes"
 
 ## 0.4.0 (January 10th, 2026)
 

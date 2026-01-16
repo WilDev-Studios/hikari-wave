@@ -18,10 +18,11 @@ class FrameStore:
     """Mode-switching capable storage buffer."""
 
     __slots__ = (
-        "_connection", "_live_buffer", "_frames_per_second", "_memory_limit",
-        "_read_lock", "_chunk_lock", "_chunk_buffer", "_chunk_frame_limit", "_chunk_frame_count",
-        "_disk_queue", "_current_file", "_current_file_path", "_file_index",
-        "_low_mark", "_high_mark", "_refilling", "_eos_written", "_eos_emitted", "_event", "_read_task",
+        "_connection", "_live_buffer", "_generation", "_frames_per_second", "_memory_limit",
+        "_read_lock", "_chunk_buffer", "_chunk_frame_limit", "_chunk_frame_count",
+        "_disk_queue", "_file_index", "_low_mark", "_high_mark", "_refilling",
+        "_eos_written", "_eos_emitted", "_event", "_read_task", "_write_task",
+        "_write_queue", "_active_chunk", "_write_event", "_shutdown",
     )
 
     def __init__(self, connection: VoiceConnection) -> None:
@@ -37,6 +38,7 @@ class FrameStore:
         self._connection: VoiceConnection = connection
 
         self._live_buffer: asyncio.Queue[bytes | None] = asyncio.Queue()
+        self._generation: int = 0
 
         self._frames_per_second: int = 1000 // Audio.FRAME_LENGTH
         self._memory_limit: int = (
@@ -45,14 +47,13 @@ class FrameStore:
         )
 
         self._read_lock: asyncio.Lock = asyncio.Lock()
-        self._chunk_lock: asyncio.Lock = asyncio.Lock()
+
         self._chunk_buffer: bytearray = bytearray()
+        self._active_chunk: bytearray = bytearray()
         self._chunk_frame_limit: int = self._memory_limit
         self._chunk_frame_count: int = 0
 
         self._disk_queue: deque[int] = deque()
-        self._current_file: aiofiles.threadpool.binary.AsyncBufferedReader | None = None
-        self._current_file_path: str | None = None
         self._file_index: int = 0
 
         self._low_mark: int = self._memory_limit // 4
@@ -63,23 +64,39 @@ class FrameStore:
         self._eos_emitted: bool = False
 
         self._event: asyncio.Event = asyncio.Event()
+        self._write_event: asyncio.Event = asyncio.Event()
         self._read_task: asyncio.Task[None] | None = None
+        self._write_task: asyncio.Task[None] | None = None
+        self._write_queue: asyncio.Queue[tuple[int, bytearray] | None] = asyncio.Queue()
+        self._shutdown: bool = False
 
         if self._connection._config.buffer.mode == BufferMode.DISK:
             os.makedirs(f"wavecache/{self._connection._guild_id}", exist_ok=True)
+            self._write_task = asyncio.create_task(self._disk_writer())
     
-    async def _flush_chunk(self) -> None:
-        if not self._chunk_buffer:
-            return
+    async def _disk_writer(self) -> None:
+        try:
+            while not self._shutdown:
+                item: tuple[int, bytearray] = await self._write_queue.get()
 
-        self._file_index += 1
+                if item is None:
+                    break
 
-        async with aiofiles.open(f"wavecache/{self._connection._guild_id}/{self._file_index}.wcf", "wb") as file:
-            await file.write(self._chunk_buffer)
-        
-        self._disk_queue.append(self._file_index)
-        self._chunk_buffer.clear()
-        self._chunk_frame_count = 0
+                file_index, data = item
+                path: str = f"wavecache/{self._connection._guild_id}/{file_index}.wcf"
+
+                try:
+                    async with aiofiles.open(path, "wb") as file:
+                        await file.write(data)
+                    
+                    self._disk_queue.append(file_index)
+                    self._event.set()
+                except Exception:
+                    pass
+
+                del data
+        except asyncio.CancelledError:
+            pass
 
     async def _read_chunk(self) -> None:
         try:
@@ -94,27 +111,41 @@ class FrameStore:
                     path: str = f"wavecache/{self._connection._guild_id}/{file_index}.wcf"
 
                     async with aiofiles.open(path, "rb") as file:
-                        batch: list[bytes] = []
-                        
-                        while True:
-                            length_bytes: bytes = await file.read(2)
-                            if not length_bytes:
-                                break
-
-                            batch.append(await file.read(int.from_bytes(length_bytes, "big")))
+                        content: bytes = await file.read()
                     
-                            if len(batch) >= 100:
-                                for frame in batch: await self._live_buffer.put(frame)
-
-                                batch.clear()
-                                await asyncio.sleep(0)
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
+                
+                    offset: int = 0
+                    batch: list[bytes] = []
                         
-                        for frame in batch: await self._live_buffer.put(frame)
+                    while offset < len(content):
+                        if offset + 2 > len(content):
+                            break
 
-                    os.remove(path)
+                        length: int = int.from_bytes(content[offset:offset + 2], "big")
+                        offset += 2
 
+                        if offset + length > len(content):
+                            break
+
+                        batch.append(content[offset:offset + length])
+                        offset += length
+
+                        if len(batch) >= 100:
+                            for frame in batch:
+                                self._live_buffer.put_nowait(frame)
+                            
+                            batch.clear()
+                            await asyncio.sleep(0)
+                    
+                    for frame in batch:
+                        self._live_buffer.put_nowait(frame)
+                    
                     if not self._disk_queue and self._eos_written:
-                        await self._live_buffer.put(None)
+                        self._live_buffer.put_nowait(None)
                 finally:
                     self._refilling = False
                     self._event.set()
@@ -126,6 +157,24 @@ class FrameStore:
         Clear all internal buffers and stop any operations.
         """
         
+        self._generation += 1
+        self._shutdown = True
+
+        if self._write_task:
+            self._write_queue.put_nowait(None)
+
+            try:
+                await asyncio.wait_for(self._write_task, 2.0)
+            except asyncio.CancelledError | asyncio.TimeoutError:
+                self._write_task.cancel()
+
+                try:
+                    await self._write_task
+                except asyncio.CancelledError:
+                    pass
+
+                self._write_task = None
+
         async with self._read_lock:
             if self._read_task:
                 self._read_task.cancel()
@@ -142,18 +191,18 @@ class FrameStore:
         self._eos_emitted = False
         self._refilling = False
         self._file_index = 0
-        self._current_file_path = None
-        self._current_file = None
 
         self._chunk_frame_count = 0
         self._chunk_buffer.clear()
+        self._active_chunk.clear()
 
         self._live_buffer = asyncio.Queue()
+        self._write_queue = asyncio.Queue()
 
         if self._connection._config.buffer.mode == BufferMode.DISK:
             while self._disk_queue:
-                index = self._disk_queue.popleft()
-                path = f"wavecache/{self._connection._guild_id}/{index}.wcf"
+                index: int = self._disk_queue.popleft()
+                path: str = f"wavecache/{self._connection._guild_id}/{index}.wcf"
 
                 try:
                     if os.path.exists(path):
@@ -162,11 +211,23 @@ class FrameStore:
                     pass
             
             try:
-                for filename in os.listdir(f"wavecache/{self._connection._guild_id}"):
-                    if filename.endswith(".wcf"):
-                        os.remove(os.path.join("wavecache", f"{self._connection._guild_id}", filename))
+                cache_dir: str = f"wavecache/{self._connection._guild_id}"
+                if os.path.exists(cache_dir):
+                    for filename in os.listdir(cache_dir):
+                        if not filename.endswith(".wcf"):
+                            continue
+
+                        try:
+                            os.remove(os.path.join(cache_dir, filename))
+                        except OSError:
+                            pass
             except OSError:
                 pass
+                
+        self._shutdown = False
+
+        if self._connection._config.buffer.mode == BufferMode.DISK:
+            self._write_task = asyncio.create_task(self._disk_writer())
 
     async def fetch_frame(self) -> bytes | None:
         """
@@ -175,7 +236,7 @@ class FrameStore:
         
         while True:
             if not self._live_buffer.empty():
-                frame: bytes | bytes =  await self._live_buffer.get()
+                frame: bytes | None = self._live_buffer.get_nowait()
             
                 if self._connection._config.buffer.mode == BufferMode.DISK and self._live_buffer.qsize() <= self._low_mark and self._disk_queue:
                     if self._read_task is None or self._read_task.done():
@@ -192,7 +253,7 @@ class FrameStore:
             self._event.clear()
             await self._event.wait()
 
-    async def store_frame(self, frame: bytes | None) -> None:
+    async def store_frame(self, frame: bytes | None, generation: int) -> bool:
         """
         Store a frame.
         
@@ -200,47 +261,78 @@ class FrameStore:
         ----------
         frame : bytes | None
             The frame to store.
+        generation : int
+            The current source's generation ID, to prevent stale audio from extended FFmpeg processes.
+        
+        Returns
+        -------
+        bool
+            If the frame was stored.
         """
         
+        if generation != self._generation:
+            return False
+
         if self._connection._config.buffer.mode == BufferMode.MEMORY:
-            await self._live_buffer.put(frame)
+            self._live_buffer.put_nowait(frame)
             self._event.set()
-            return
+            return True
         
         if frame is None:
             self._eos_written = True
 
-            async with self._chunk_lock:
-                await self._flush_chunk()
+            if self._active_chunk:
+                self._file_index += 1
+                chunk_copy: bytearray = bytearray(self._active_chunk)
+                self._active_chunk.clear()
+                self._chunk_frame_count = 0
+                self._write_queue.put_nowait((self._file_index, chunk_copy))
 
-            if not self._disk_queue:
-                await self._live_buffer.put(None)
+            if not self._disk_queue and self._write_queue.empty():
+                self._live_buffer.put_nowait(None)
     
             self._event.set()
-            return
+            return True
         
-        has_backlog: bool = bool(self._disk_queue) or bool(self._chunk_buffer)
+        has_backlog: bool = bool(self._disk_queue) or bool(self._active_chunk)
         
         if not has_backlog and self._live_buffer.qsize() < self._high_mark:
-            await self._live_buffer.put(frame)
+            self._live_buffer.put_nowait(frame)
             self._event.set()
-            return
+            return True
         
-        async with self._chunk_lock:
-            self._chunk_buffer.extend(len(frame).to_bytes(2, "big") + frame)
-            self._chunk_frame_count += 1
+        frame_data: bytes = len(frame).to_bytes(2, "big") + frame
+        self._active_chunk.extend(frame_data)
+        self._chunk_frame_count += 1
 
-            if self._chunk_frame_count >= self._chunk_frame_limit:
-                await self._flush_chunk()
-                self._event.set()
+        if self._chunk_frame_count >= self._chunk_frame_limit:
+            self._file_index += 1
+            self._active_chunk, self._chunk_buffer = self._chunk_buffer, self._active_chunk
+
+            self._write_queue.put_nowait((self._file_index, self._chunk_buffer))
+
+            self._active_chunk.clear()
+            self._chunk_frame_count = 0
+
+            self._event.set()
+        
+        return True
     
-    async def wait(self) -> None:
+    async def wait(self, *, frames: int = 0) -> None:
         """
         Wait until the store is available to read from.
+
+        Parameters
+        ----------
+        frames : int
+            If provided, the minimum amount of frames in store before continuing.
         """
         
-        if not self._live_buffer.empty() or (self._eos_written and not self._disk_queue):
-            return
-        
-        self._event.clear()
-        await self._event.wait()
+        while True:
+            available: int = self._live_buffer.qsize() + len(self._disk_queue)
+
+            if available >= frames or (self._eos_written and not self._disk_queue):
+                return
+            
+            self._event.clear()
+            await self._event.wait()

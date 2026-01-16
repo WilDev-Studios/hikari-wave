@@ -96,6 +96,8 @@ nav:
     - hikariwave.networking:
       - hikariwave.networking.gateway: pages/api/networking/gateway.md
       - hikariwave.networking.server: pages/api/networking/server.md
+    - hikariwave.utils:
+      - hikariwave.utils.youtube: pages/api/utils/youtube.md
   - Changelog:
     - Index: pages/changelog/index.md
     - 0.5.0a1 (STAGING): pages/changelog/0.5.0a1.md
