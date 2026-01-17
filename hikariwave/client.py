@@ -34,6 +34,10 @@ ChannelID: TypeAlias = hikari.Snowflakeish
 GuildID: TypeAlias = hikari.Snowflakeish
 MemberID: TypeAlias = hikari.Snowflakeish
 
+Deafened: TypeAlias = bool
+Muted: TypeAlias = bool
+SSRC: TypeAlias = int
+
 @dataclass(slots=True)
 class VoiceChannelMeta:
     """Metadata container for a voice channel."""
@@ -98,10 +102,10 @@ class VoiceClient:
 
         self._channels: dict[ChannelID, VoiceChannelMeta] = {}
         self._members: dict[MemberID, ChannelID] = {}
-        self._ssrcs: dict[MemberID, int] = {}
-        self._ssrcsr: dict[int, MemberID] = {}
+        self._ssrcs: dict[MemberID, SSRC] = {}
+        self._ssrcsr: dict[SSRC, MemberID] = {}
 
-        self._states: dict[MemberID, tuple[bool, bool]] = {}
+        self._states: dict[MemberID, tuple[Deafened, Muted]] = {}
 
         self._event_factory: EventFactory = EventFactory(self._bot)
         self._ffmpeg: FFmpegPool = FFmpegPool()
@@ -583,4 +587,5 @@ class VoiceClient:
         
         if old_channel_id:
             guild_id = self._connectionsr[old_channel_id]
+            
         return await self._connect(guild_id, channel_id, mute, deaf, True)
