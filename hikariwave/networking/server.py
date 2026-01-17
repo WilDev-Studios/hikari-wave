@@ -90,6 +90,15 @@ class Protocol(asyncio.DatagramProtocol):
             return 
 
 class RTPStats:
+    __slots__ = (
+        "_prev_arrival",
+        "_prev_timestamp",
+        "_jitter",
+        "_last_seq",
+        "_received",
+        "_lost",
+    )
+    
     def __init__(self) -> None:
         self._prev_arrival: float | None = None
         self._prev_timestamp: int | None = None

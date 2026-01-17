@@ -87,16 +87,8 @@ class Opcode(IntEnum):
     """`SERVER/JSON` - Acknowledge a successful session resume."""
     CLIENTS_CONNECT = 11
     """`SERVER/JSON` - One or more clients have connection to the voice channel."""
-    UNDOCUMENTED_12 = 12
-    """`SERVER/JSON` - Unknown as of `0.1.0a1`."""
     CLIENT_DISCONNECT = 13
     """`SERVER/JSON` - A client has disconnected from the voice channel."""
-    UNDOCUMENTED_15 = 15
-    """`SERVER/JSON` - Unknown as of `0.0.1a1`."""
-    UNDOCUMENTED_18 = 18
-    """`SERVER/JSON` - Unknown as of `0.0.1a1` - Contains user flags of user who joined channel."""
-    UNDOCUMENTED_20 = 20
-    """`SERVER/JSON` - Unknown as of `0.0.1a1` - Contains user platform of user who joined channel."""
     DAVE_PREPARE_TRANSITION = 21
     """`SERVER/JSON` - A downgrade from the DAVE protocol is upcoming."""
     DAVE_EXECUTE_TRANSITION = 22

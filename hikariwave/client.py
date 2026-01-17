@@ -338,6 +338,8 @@ class VoiceClient:
         Shut down every connection and clean up.
         """
 
+        logger.info("Client requested to close; cleaning up...")
+
         self._bot.unsubscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
         self._bot.unsubscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
         self._bot.unsubscribe(hikari.StoppingEvent, self.close)
