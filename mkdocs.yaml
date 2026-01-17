@@ -85,7 +85,12 @@ nav:
     - hikariwave.config: pages/api/config.md
     - hikariwave.connection: pages/api/connection.md
     - hikariwave.event:
-      - hikariwave.event.events: pages/api/event/events.md
+      - hikariwave.event.events:
+        - hikariwave.event.events.audio: pages/api/event/events/audio.md
+        - hikariwave.event.events.base: pages/api/event/events/base.md
+        - hikariwave.event.events.bot: pages/api/event/events/bot.md
+        - hikariwave.event.events.member: pages/api/event/events/member.md
+        - hikariwave.event.events.voice: pages/api/event/events/voice.md
       - hikariwave.event.factory: pages/api/event/factory.md
       - hikariwave.event.types: pages/api/event/types.md
     - hikariwave.internal:

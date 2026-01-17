@@ -4,8 +4,18 @@ from dataclasses import dataclass
 from hikariwave.audio.ffmpeg import FFmpegPool
 from hikariwave.config import Config
 from hikariwave.connection import VoiceConnection
+from hikariwave.event.events.bot import (
+    BotJoinEvent,
+    BotLeaveEvent,
+)
+from hikariwave.event.events.member import (
+    MemberDeafEvent,
+    MemberJoinEvent,
+    MemberLeaveEvent,
+    MemberMoveEvent,
+    MemberMuteEvent,
+)
 from hikariwave.event.factory import EventFactory
-from hikariwave.event.types import WaveEventType
 from hikariwave.internal.error import GatewayError
 from typing import TypeAlias
 
@@ -154,12 +164,12 @@ class VoiceClient:
             self._connectionsr[channel_id] = guild_id
 
             self._event_factory.emit(
-                WaveEventType.BOT_JOIN_VOICE,
-                self._bot,
-                channel_id,
-                guild_id,
-                deaf,
-                mute,
+                BotJoinEvent,
+                bot=self._bot,
+                channel_id=channel_id,
+                guild_id=guild_id,
+                is_deaf=deaf,
+                is_mute=mute,
             )
 
             return connection
@@ -187,10 +197,10 @@ class VoiceClient:
                     self._ssrcsr.pop(ssrc, None)
 
         self._event_factory.emit(
-            WaveEventType.BOT_LEAVE_VOICE,
-            self._bot,
-            connection._channel_id,
-            guild_id,
+            BotLeaveEvent,
+            bot=self._bot,
+            channel_id=connection._channel_id,
+            guild_id=guild_id,
         )
 
         if os.path.exists(f"wavecache/{guild_id}"): shutil.rmtree(f"wavecache/{guild_id}")
@@ -226,10 +236,10 @@ class VoiceClient:
                 self._members[member.id] = new_channel_id
 
             self._event_factory.emit(
-                WaveEventType.MEMBER_JOIN_VOICE,
-                new_channel_id,
-                guild_id,
-                member,
+                MemberJoinEvent,
+                channel_id=new_channel_id,
+                guild_id=guild_id,
+                member=member,
             )
         # Member Moved Channels
         elif new_channel_id and old_channel_id and old_channel_id != new_channel_id:
@@ -252,11 +262,11 @@ class VoiceClient:
                     del self._ssrcsr[ssrc]
 
             self._event_factory.emit(
-                WaveEventType.MEMBER_MOVE_VOICE,
-                guild_id,
-                member,
-                new_channel_id,
-                old_channel_id,
+                MemberMoveEvent,
+                channel_id=new_channel_id,
+                guild_id=guild_id,
+                member=member,
+                old_channel_id=old_channel_id,
             )
         # Member Left Channel
         elif not new_channel_id and old_channel_id:
@@ -272,10 +282,10 @@ class VoiceClient:
                     del self._ssrcsr[ssrc]
 
             self._event_factory.emit(
-                WaveEventType.MEMBER_LEAVE_VOICE,
-                old_channel_id,
-                guild_id,
-                member,
+                MemberLeaveEvent,
+                channel_id=old_channel_id,
+                guild_id=guild_id,
+                member=member,
             )
         # Member Update
         elif new_channel_id and old_channel_id and new_channel_id == old_channel_id:
@@ -290,20 +300,20 @@ class VoiceClient:
 
             if old_deaf != member.is_deaf:
                 self._event_factory.emit(
-                    WaveEventType.MEMBER_DEAF,
-                    new_channel_id,
-                    guild_id,
-                    member,
-                    member.is_deaf,
+                    MemberDeafEvent,
+                    channel_id=new_channel_id,
+                    guild_id=guild_id,
+                    is_deaf=member.is_deaf,
+                    member=member,
                 )
             
             if old_mute != member.is_mute:
                 self._event_factory.emit(
-                    WaveEventType.MEMBER_MUTE,
-                    new_channel_id,
-                    guild_id,
-                    member,
-                    member.is_mute,
+                    MemberMuteEvent,
+                    channel_id=new_channel_id,
+                    guild_id=guild_id,
+                    is_mute=member.is_mute,
+                    member=member,
                 )
             
             self._states[member.id] = (member.is_deaf, member.is_mute)

@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from enum import auto, IntEnum
 from hikariwave.audio.source import AudioSource
 from hikariwave.audio.store import FrameStore
-from hikariwave.event.types import AudioBeginOrigin, WaveEventType
+from hikariwave.event.events.audio import (
+    AudioBeginEvent,
+    AudioElapsedEvent,
+    AudioEndEvent,
+)
+from hikariwave.event.types import AudioBeginOrigin
 from hikariwave.internal.constants import Audio
 from hikariwave.internal.result import Result, ResultReason
 from typing import Any, Callable, Coroutine, TYPE_CHECKING
@@ -141,11 +146,11 @@ class AudioPlayer:
             await self._connection._gateway.set_speaking(True, self._priority)
             
             self._connection._client._event_factory.emit(
-                WaveEventType.AUDIO_BEGIN,
-                self._connection._channel_id,
-                self._connection._guild_id,
-                source,
-                origin,
+                AudioBeginEvent,
+                audio=source,
+                channel_id=self._connection._channel_id,
+                guild_id=self._connection._guild_id,
+                origin=origin,
             )
 
             frame_duration: float = Audio.FRAME_LENGTH / 1000
@@ -204,11 +209,13 @@ class AudioPlayer:
                     last_second = elapsed_seconds
 
                     self._connection._client._event_factory.emit(
-                        WaveEventType.AUDIO_SECOND,
-                        self._connection._channel_id,
-                        self._connection._guild_id,
-                        source,
-                        elapsed_seconds,
+                        AudioElapsedEvent,
+                        audio=source,
+                        channel_id=self._connection._channel_id,
+                        guild_id=self._connection._guild_id,
+                        hours=elapsed_seconds // 3600,
+                        minutes=elapsed_seconds // 60,
+                        seconds=elapsed_seconds,
                     )
         finally:
             if self._state == AudioPlaybackState.BUFFERING:
@@ -255,10 +262,10 @@ class AudioPlayer:
                     self._set_state(AudioPlaybackState.IDLE)
 
                     self._connection._client._event_factory.emit(
-                        WaveEventType.AUDIO_END,
-                        self._connection._channel_id,
-                        self._connection._guild_id,
-                        ended,
+                        AudioEndEvent,
+                        audio=ended,
+                        channel_id=self._connection._channel_id,
+                        guild_id=self._connection._guild_id,
                     )
         except asyncio.CancelledError:
             pass

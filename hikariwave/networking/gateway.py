@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hikariwave.event.types import WaveEventType
+from hikariwave.event.events.voice import VoiceReconnectEvent
 from hikariwave.internal.constants import CloseCode, Constants, Opcode
 from hikariwave.internal.error import GatewayError
 from typing import Any, Callable, Coroutine, TYPE_CHECKING
@@ -178,9 +178,9 @@ class VoiceGateway:
                     logger.info(f"Client session resumed after disconnect")
 
                     self._connection._client._event_factory.emit(
-                        WaveEventType.VOICE_RECONNECT,
-                        self._channel_id,
-                        self._guild_id,
+                        VoiceReconnectEvent,
+                        channel_id=self._channel_id,
+                        guild_id=self._guild_id,
                     )
                 case Opcode.CLIENTS_CONNECT:...
                 case Opcode.UNDOCUMENTED_12:...

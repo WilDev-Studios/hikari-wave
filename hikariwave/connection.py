@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import auto, IntEnum
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.config import Config
-from hikariwave.event.types import WaveEventType
+from hikariwave.event.events.voice import VoiceReconnectEvent
 from hikariwave.internal.encrypt import Encrypt
 from hikariwave.networking.gateway import Opcode, ReadyPayload, SessionDescriptionPayload, VoiceGateway
 from hikariwave.networking.server import VoiceServer
@@ -177,9 +177,9 @@ class VoiceConnection:
         await self._gateway.connect(f"{self._endpoint}/?v=8")
 
         self._client._event_factory.emit(
-            WaveEventType.VOICE_RECONNECT,
-            self._channel_id,
-            self._guild_id,
+            VoiceReconnectEvent,
+            channel_id=self._channel_id,
+            guild_id=self._guild_id,
         )
 
     async def _gateway_session_description(self, payload: SessionDescriptionPayload) -> None:
