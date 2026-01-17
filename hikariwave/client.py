@@ -24,6 +24,7 @@ import hikari
 import logging
 import os
 import shutil
+import warnings
 
 __all__ = ("VoiceClient",)
 
@@ -116,6 +117,11 @@ class VoiceClient:
                 return self._connections[guild_id]
 
             logger.info(f"Connecting to voice: Guild={guild_id}, Channel={channel_id}, Mute={mute}, Deaf={deaf}")
+            
+            if self._config.record and deaf:
+                warning: str = "Voice client is set to record audio but `deaf` is True; audio cannot be received"
+                logger.warning(warning)
+                warnings.warn(warning, RuntimeWarning, 2)
 
             await self._bot.update_voice_state(guild_id, channel_id, self_mute=mute, self_deaf=deaf)
 
