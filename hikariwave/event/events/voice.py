@@ -15,11 +15,11 @@ class VoiceEvent(WaveEvent):
     """Base voice event implementation."""
 
 @dataclass(frozen=True, init=False, slots=True)
-class VoiceReconnectEvent(WaveEvent):
+class VoiceReconnectEvent(VoiceEvent):
     """Dispatched when a voice connection reconnects or resumes."""
 
 @dataclass(frozen=True, init=False, slots=True)
-class VoiceWarningEvent(WaveEvent):
+class VoiceWarningEvent(VoiceEvent):
     """Dispatched when non-fatal voice issues occur (packet loss, jitter, latency)."""
 
     type: VoiceWarningType

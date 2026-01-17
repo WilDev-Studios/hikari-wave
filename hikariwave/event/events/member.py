@@ -25,45 +25,45 @@ class MemberEvent(WaveEvent):
     """The member that this event references."""
 
 @dataclass(frozen=True, init=False, slots=True)
-class MemberDeafEvent(WaveEvent):
+class MemberDeafEvent(MemberEvent):
     """Dispatched when a member in a voice channel deafens/undeafens (themself/server)."""
 
     is_deaf: bool
     """If the member is deafened."""
 
 @dataclass(frozen=True, init=False, slots=True)
-class MemberJoinEvent(WaveEvent):
+class MemberJoinEvent(MemberEvent):
     """Dispatched when a member joins a voice channel."""
 
 @dataclass(frozen=True, init=False, slots=True)
-class MemberLeaveEvent(WaveEvent):
+class MemberLeaveEvent(MemberEvent):
     """Dispatched when a member leaves a voice channel."""
 
 @dataclass(frozen=True, init=False, slots=True)
-class MemberMoveEvent(WaveEvent):
+class MemberMoveEvent(MemberEvent):
     """Dispatched when a member moves voice channels."""
 
     old_channel_id: hikari.Snowflake
     """The ID of the channel that was left."""
 
 @dataclass(frozen=True, init=False, slots=True)
-class MemberMuteEvent(WaveEvent):
+class MemberMuteEvent(MemberEvent):
     """Dispatched when a member in a voice channel mutes/unmutes (themself/server)."""
 
     is_mute: bool
     """If the member is muted."""
 
 @dataclass(frozen=True, init=False, slots=True)
-class MemberSpeechEvent(WaveEvent):
+class MemberSpeechEvent(MemberEvent):
     """Dispatched when a member in a voice channel finishes speaking and you wish to handle their voice packets."""
 
     audio: list[bytes]
     """The Opus audio emitted from this member."""
 
 @dataclass(frozen=True, init=False, slots=True)
-class MemberStartSpeakingEvent(WaveEvent):
+class MemberStartSpeakingEvent(MemberEvent):
     """Dispatched when a member in a voice channel begins speaking."""
 
 @dataclass(frozen=True, init=False, slots=True)
-class MemberStopSpeakingEvent(WaveEvent):
+class MemberStopSpeakingEvent(MemberEvent):
     """Dispatched when a member in a voice channel stops speaking."""
