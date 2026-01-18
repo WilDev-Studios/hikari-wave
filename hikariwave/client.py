@@ -219,6 +219,9 @@ class VoiceClient:
         if event.state.user_id != self._bot.get_me().id:
             return
         
+        if event.state.channel_id:
+            return
+        
         if event.guild_id not in self._connections:
             return
         
@@ -390,7 +393,7 @@ class VoiceClient:
         Raises
         ------
         asyncio.TimeoutError
-            If Discord doesn't send a corresponding voice server/state update.
+            If Discord doesn't send a corresponding voice server/state update (i.e. bot is timed out, server error, etc.).
         TypeError
             - If `guild_id` or `channel_id` aren't `hikari.Snowflakeish`.
             - If `mute` or `deaf` aren't `bool`.
@@ -555,7 +558,7 @@ class VoiceClient:
         Raises
         ------
         asyncio.TimeoutError
-            If Discord doesn't send a corresponding voice server/state update.
+            If Discord doesn't send a corresponding voice server/state update (i.e. bot is timed out, server error, etc.).
         TypeError
             - If `channel_id`, `old_channel_id`, or `guild_id` aren't `hikari.Snowflakeish`.
             - If `mute` or `deaf` aren't `bool`.
