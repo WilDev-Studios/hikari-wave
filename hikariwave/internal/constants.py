@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from davey import DAVE_PROTOCOL_VERSION
 from enum import IntEnum, IntFlag
 
 __all__ = ()
@@ -63,7 +64,7 @@ class CloseCode(IntEnum):
 class Constants:
     """Collection of miscellaneous constants."""
 
-    DAVE_VERSION: int = 0
+    DAVE_VERSION: int = DAVE_PROTOCOL_VERSION
     """The maximum supported `DAVE` version."""
     GATEWAY_VERSION: int = 8
     """The Discord voice gateway version this library implements."""
@@ -78,7 +79,7 @@ class Opcode(IntEnum):
     READY = 2
     """`SERVER/JSON` - Complete the websocket handshake."""
     HEARTBEAT = 3
-    """`CLIENT/JSON` - Keep the websocket connection alive."""
+    """`CLIENT/JSON:BYTE` - Keep the websocket connection alive."""
     SESSION_DESCRIPTION = 4
     """`SERVER/JSON` - Describe the session."""
     SPEAKING = 5

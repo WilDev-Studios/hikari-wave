@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import (
     auto,
     IntEnum,
@@ -23,6 +24,23 @@ if TYPE_CHECKING:
 __all__ = ()
 
 logger: logging.Logger = logging.getLogger("hikari-wave.websocket")
+
+class WebsocketPacket:
+    """Base websocket packet implementation."""
+
+@dataclass(frozen=True, slots=True)
+class WebsocketPacketBytes(WebsocketPacket):
+    """Bytes-structured websocket packet."""
+
+    payload: bytes
+    """The bytes packet payload."""
+
+@dataclass(frozen=True, slots=True)
+class WebsocketPacketJSON(WebsocketPacket):
+    """JSON-structured websocket packet."""
+
+    payload: dict[str, Any]
+    """The JSON packet payload."""
 
 class WebsocketState(IntEnum):
     """Websocket connection state."""
@@ -89,6 +107,20 @@ class Websocket:
             case _:
                 logger.error("Received unhandled close code {code}; disconnecting...")
                 raise DisconnectSignal()
+
+    async def __send(self, data: bytes | str) -> None:
+        if self._state in (WebsocketState.DISCONNECTED, WebsocketState.DISCONNECTING):
+            return DisconnectSignal()
+        
+        if self._state is not WebsocketState.CONNECTED:
+            return ReconnectSignal()
+        
+        try:
+            await self._websocket.send(data)
+        except OSError:
+            raise ResumeSignal()
+        except websockets.ConnectionClosed as e:
+            self.__close(e)
 
     async def connect(self, url: str) -> None:
         """
@@ -157,14 +189,14 @@ class Websocket:
         """If the websocket is currently disconnecting."""
         return self._state is WebsocketState.DISCONNECTING
 
-    async def receive_json(self) -> dict[str, Any]:
+    async def receive(self) -> WebsocketPacket:
         """
-        Block until a JSON payload is received.
+        Block until a payload is received.
         
         Returns
         -------
-        dict[str, Any]
-            The JSON payload received.
+        WebsocketPacket
+            The received payload, either `bytes` or `JSON`.
         
         Raises
         ------
@@ -172,6 +204,8 @@ class Websocket:
             Error occurred and no further attempts should be made to connect.
         ReconnectSignal
             Error occurred and further attempts should be made to connect.
+        RuntimeError
+            An unexpected payload type was received.
         ResumeSignal
             Error occurred and an attempt to resume the session should be made.
         """
@@ -183,19 +217,44 @@ class Websocket:
             raise ReconnectSignal()
 
         try:
-            payload: str = await self._websocket.recv()
+            payload: str | bytes = await self._websocket.recv()
         except OSError:
             raise ResumeSignal()
         except websockets.ConnectionClosed as e:
             self.__close(e)
         
-        if not isinstance(payload, str):
-            return {}
+        if isinstance(payload, str):
+            try:
+                return WebsocketPacketJSON(json.loads(payload))
+            except json.JSONDecodeError:
+                return WebsocketPacketJSON({})
         
-        try:
-            return json.loads(payload)
-        except json.JSONDecodeError:
-            return {}
+        if isinstance(payload, bytes):
+            return WebsocketPacketBytes(payload)
+        
+        error: str = f"Unexpected websocket payload type: {type(payload)!r}"
+        raise RuntimeError(error)
+
+    async def send_bytes(self, data: bytes) -> None:
+        """
+        Send a `bytes` payload through the websocket.
+        
+        Parameters
+        ----------
+        data : bytes
+            The `bytes` payload to send.
+        
+        Raises
+        ------
+        DisconnectSignal
+            Error occurred and no further attempts should be made to connect.
+        ReconnectSignal
+            Error occurred and further attempts should be made to connect.
+        ResumeSignal
+            Error occurred and an attempt to resume the session should be made.
+        """
+
+        await self.__send(data)
 
     async def send_json(self, data: dict[str, Any]) -> None:
         """
@@ -216,15 +275,4 @@ class Websocket:
             Error occurred and an attempt to resume the session should be made.
         """
 
-        if self._state in (WebsocketState.DISCONNECTED, WebsocketState.DISCONNECTING):
-            raise DisconnectSignal()
-
-        if self._state is not WebsocketState.CONNECTED:
-            raise ReconnectSignal()
-        
-        try:
-            await self._websocket.send(json.dumps(data))
-        except OSError:
-            raise ResumeSignal()
-        except websockets.ConnectionClosed as e:
-            self.__close(e)
+        await self.__send(json.dumps(data))

@@ -201,6 +201,9 @@ class VoiceServer:
         if self._connection._config._record:
             opus: bytes = self._connection._decryption_mode(self._connection._secret, data)
 
+            if self._connection._gateway._dave.ready:
+                opus = self._connection._gateway._dave.decrypt(self._connection._client._ssrcsr[ssrc], opus)
+
             if ssrc in self._buffers:
                 self._buffers[ssrc].append(opus)
             else:

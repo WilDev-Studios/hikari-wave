@@ -8,13 +8,14 @@ from hikariwave.internal.constants import (
     Opcode,
     SpeakingFlag,
 )
+from hikariwave.internal.dave import DAVEManager
 from hikariwave.internal.error import GatewayError
 from hikariwave.internal.signal import (
     DisconnectSignal,
     ReconnectSignal,
     ResumeSignal,
 )
-from hikariwave.internal.websocket import Websocket
+from hikariwave.internal.websocket import Websocket, WebsocketPacket, WebsocketPacketBytes, WebsocketPacketJSON
 from typing import Any, Callable, Coroutine, TYPE_CHECKING
 
 import asyncio
@@ -78,7 +79,7 @@ class VoiceGateway:
         "_connection", "_state",
         "_guild_id", "_channel_id", "_bot_id",
         "_session_id", "_token", "_sequence", "_ssrc",
-        "_gateway_url", "_websocket",
+        "_gateway_url", "_websocket", "_dave",
         "_task_heartbeat", "_task_listen", "_callbacks",
         "_heartbeat_sent", "_heartbeat_ack",
         "_reconnect_attempts", "_task_reconnect",
@@ -126,6 +127,7 @@ class VoiceGateway:
 
         self._gateway_url: str | None = None
         self._websocket: Websocket = Websocket()
+        self._dave: DAVEManager = DAVEManager(self)
         
         self._task_heartbeat: asyncio.Task[None] | None = None
         self._task_listen: asyncio.Task[None] | None = None
@@ -148,7 +150,7 @@ class VoiceGateway:
             try:
                 now: float = time.time()
 
-                if self._heartbeat_ack and now - self._heartbeat_ack > interval * 2:
+                if self._heartbeat_ack > 0 and now - self._heartbeat_ack > interval * 2:
                     logger.warning("Voice gateway heartbeat ACK timed out")
                     raise ReconnectSignal()
 
@@ -178,68 +180,95 @@ class VoiceGateway:
     async def __loop_listen(self) -> None:
         try:
             while True:
-                try:
-                    packet: dict[str, Any] = await self._websocket.receive_json()
-                except DisconnectSignal:
-                    logger.debug(f"Voice gateway signalled to disconnect; disconnecting...")
-                    await self.disconnect()
-                    return
-                except ReconnectSignal:
-                    await self.__reconnect()
-                    return
-                except ResumeSignal:
-                    await self.__resume()
-                    return
+                packet: WebsocketPacket = await self._websocket.receive()
                 
-                opcode: int = packet.get("op")
-                if opcode is None:
-                    continue
+                if isinstance(packet, WebsocketPacketJSON):
+                    opcode: int = packet.payload.get("op")
+                    if opcode is None:
+                        continue
 
-                self._sequence = packet.get("seq", self._sequence)
-                payload: dict[str, Any] = packet.get('d', {})
+                    self._sequence = packet.payload.get("seq", self._sequence)
+                    payload_json: dict[str, Any] = packet.payload.get('d', {})
 
-                match opcode:
-                    case Opcode.READY:
-                        self._ssrc = payload.get("ssrc")
-                        await self.__callback(Opcode.READY, GatewayReadyPayload(
-                            payload.get("ip"), payload.get("modes"), payload.get("port"), self._ssrc,
-                        ))
-                    case Opcode.SESSION_DESCRIPTION:
-                        await self.__callback(Opcode.SESSION_DESCRIPTION, GatewaySessionDescriptionPayload(
-                            payload.get("dave_protocol_version"), payload.get("mode"), bytes(payload.get("secret_key")),
-                        ))
-                    case Opcode.SPEAKING:
-                        user_id: hikari.Snowflake = hikari.Snowflake(payload.get("user_id"))
-                        ssrc: int = payload.get("ssrc")
+                    match opcode:
+                        case Opcode.READY:
+                            self._ssrc = payload_json.get("ssrc")
+                            await self.__callback(Opcode.READY, GatewayReadyPayload(
+                                payload_json.get("ip"), payload_json.get("modes"), payload_json.get("port"), self._ssrc,
+                            ))
+                        case Opcode.SESSION_DESCRIPTION:
+                            dave_version: int = payload_json.get("dave_protocol_version", 0)
+                            if dave_version > 0:
+                                self._dave.initialize_session(dave_version)
 
-                        self._connection._client._ssrcs[user_id] = ssrc
-                        self._connection._client._ssrcsr[ssrc] = user_id
-                    case Opcode.HEARTBEAT_ACK:
-                        self._heartbeat_ack = time.time()
-                    case Opcode.RESUMED:
-                        self._state = GatewayState.CONNECTED
-                        self._reconnect_attempts = 0
+                            await self.__callback(Opcode.SESSION_DESCRIPTION, GatewaySessionDescriptionPayload(
+                                dave_version, payload_json.get("mode"), bytes(payload_json.get("secret_key")),
+                            ))
+                        case Opcode.SPEAKING:
+                            user_id: hikari.Snowflake = hikari.Snowflake(payload_json.get("user_id"))
+                            ssrc: int = payload_json.get("ssrc")
 
-                        logger.debug(f"Voice gateway session resumed: Session={self._session_id}, Token={self._token}")
+                            self._connection._client._ssrcs[user_id] = ssrc
+                            self._connection._client._ssrcsr[ssrc] = user_id
+                        case Opcode.HEARTBEAT_ACK:
+                            self._heartbeat_ack = time.time()
+                        case Opcode.RESUMED:
+                            self._state = GatewayState.CONNECTED
+                            self._reconnect_attempts = 0
 
-                        self._connection._client._event_factory.emit(
-                            VoiceReconnectEvent,
-                            channel_id=self._channel_id,
-                            guild_id=self._guild_id,
-                        )
-                    case Opcode.CLIENTS_CONNECT:...
-                    case Opcode.CLIENT_DISCONNECT:...
-                    case Opcode.DAVE_PREPARE_TRANSITION:...
-                    case Opcode.DAVE_EXECUTE_TRANSITION:...
-                    case Opcode.DAVE_PREPARE_EPOCH:...
-                    case Opcode.DAVE_MLS_EXTERNAL_SENDER:...
-                    case Opcode.DAVE_MLS_PROPOSALS:...
-                    case Opcode.DAVE_MLS_ANNOUNCE_COMMIT_TRANSITION:...
-                    case Opcode.DAVE_MLS_WELCOME:...
-                    case _:
-                        logger.debug(f"Received undocumented voice gateway operation: `{opcode}`")
-                        logger.debug(packet)
+                            logger.debug(f"Voice gateway session resumed: Session={self._session_id}, Token={self._token}")
+
+                            self._connection._client._event_factory.emit(
+                                VoiceReconnectEvent,
+                                channel_id=self._channel_id,
+                                guild_id=self._guild_id,
+                            )
+                        case Opcode.CLIENTS_CONNECT:...
+                        case Opcode.CLIENT_DISCONNECT:...
+                        case Opcode.DAVE_PREPARE_TRANSITION:
+                            await self._dave.handle_prepare_transition(
+                                payload_json.get("transition_id"),
+                                payload_json.get("protocol_version"),
+                            )
+                        case Opcode.DAVE_EXECUTE_TRANSITION:
+                            await self._dave.handle_execute_transition(payload_json.get("transition_id"))
+                        case Opcode.DAVE_PREPARE_EPOCH:
+                            await self._dave.handle_prepare_epoch(
+                                payload_json.get("transition_id"),
+                                payload_json.get("epoch"),
+                            )
+                        case _:
+                            logger.debug(f"Received undocumented voice gateway operation: `{opcode}`")
+                            logger.debug(packet.payload)
+                elif isinstance(packet, WebsocketPacketBytes):
+                    self._sequence, opcode, payload_bytes = DAVEManager.parse_frame(packet.payload)
+
+                    match opcode:
+                        case Opcode.DAVE_MLS_EXTERNAL_SENDER:
+                            await self._dave.set_external_sender(payload_bytes)
+                        case Opcode.DAVE_MLS_PROPOSALS:
+                            await self._dave.handle_proposals(
+                                payload_bytes,
+                                [int(id) for id in self._connection._client._channels[self._channel_id].members.keys()],
+                            )
+                        case Opcode.DAVE_MLS_ANNOUNCE_COMMIT_TRANSITION:
+                            await self._dave.handle_commit(payload_bytes)
+                        case Opcode.DAVE_MLS_WELCOME:
+                            await self._dave.handle_welcome(payload_bytes)
+                        case _:
+                            logger.debug(f"Received undocumented DAVE voice gateway operation: `{opcode}`")
+                            logger.debug(packet.payload)
         except asyncio.CancelledError:
+            return
+        except DisconnectSignal:
+            logger.debug(f"Voice gateway signalled to disconnect; disconnecting...")
+            await self.disconnect()
+            return
+        except ReconnectSignal:
+            await self.__reconnect()
+            return
+        except ResumeSignal:
+            await self.__resume()
             return
 
     async def __reconnect(self) -> None:
@@ -321,7 +350,11 @@ class VoiceGateway:
             return
         
         try:
-            packet: dict[str, Any] = await self._websocket.receive_json()
+            packet: WebsocketPacketBytes | WebsocketPacketJSON = await self._websocket.receive()
+
+            if not isinstance(packet, WebsocketPacketJSON):
+                error: str = "Expecting a JSON-encoded packet, not `bytes`"
+                raise GatewayError(error)
         except DisconnectSignal:
             logger.debug(f"Voice gateway signalled to disconnect; disconnecting...")
             await self.disconnect()
@@ -333,13 +366,13 @@ class VoiceGateway:
             await self.__resume()
             return
         
-        opcode: int = packet.get("op")
+        opcode: int = packet.payload.get("op")
         
         if opcode != Opcode.HELLO:
             error: str = f"Expected `HELLO` ({Opcode.HELLO.value}) payload, not `{Opcode(opcode).name}` (`{opcode}`)"
             raise GatewayError(error)
         
-        payload: dict[str, Any] = packet.get('d', {})
+        payload: dict[str, Any] = packet.payload.get('d', {})
         heartbeat_interval: float = payload.get("heartbeat_interval", 0.0) / 1000
 
         self._task_heartbeat = asyncio.create_task(self.__loop_heartbeat(heartbeat_interval))

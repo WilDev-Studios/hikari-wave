@@ -95,6 +95,7 @@ nav:
       - hikariwave.event.types: pages/api/event/types.md
     - hikariwave.internal:
       - hikariwave.internal.constants: pages/api/internal/constants.md
+      - hikariwave.internal.dave: pages/api/internal/dave.md
       - hikariwave.internal.encrypt: pages/api/internal/encrypt.md
       - hikariwave.internal.error: pages/api/internal/error.md
       - hikariwave.internal.result: pages/api/internal/result.md

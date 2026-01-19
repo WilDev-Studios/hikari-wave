@@ -175,11 +175,15 @@ class AudioPlayer:
                     start_time = time.perf_counter()
 
                 header: bytes = self._generate_rtp()
+
+                if self._connection._gateway._dave.ready:
+                    opus = self._connection._gateway._dave.encrypt_opus(opus)
+
                 encrypted: bytes = self._connection._encryption_mode(
                     self._connection._secret,
                     self._nonce,
                     header,
-                    opus
+                    opus,
                 )
                 await self._connection._server.send(encrypted)
 
