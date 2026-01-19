@@ -9,7 +9,7 @@ For full details, click a specific version.
 
 ## 0.5.0 (In Progress)
 
-### 0.5.0a1 (STAGING)
+### 0.5.0a1 (January 18th, 2026)
 
 - New `utils` module with `YouTube` UX methods.
 - New `autoplay` parameter to player `add_queue` method.
