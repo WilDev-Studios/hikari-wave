@@ -88,7 +88,7 @@ That's it.
     - [X] URLs
     - [X] In-memory buffers
     - [X] YouTube
-- [ ] Discord `DAVE` (planned)
+- [X] Discord `DAVE`
 
 ## Versioning & Stability Policy
 

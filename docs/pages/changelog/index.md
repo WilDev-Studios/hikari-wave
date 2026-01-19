@@ -7,9 +7,13 @@ For full details, click a specific version.
     If you ever come across an issue during our `alpha`/`beta` stage, **please** notify us ASAP.
     We want to weed out as much issues as possible before our `1.0.0` release.
 
-## 0.5.0 (In Progress)
+## 0.6.0 (In Progress)
 
-### 0.5.0a1 (January 18th, 2026)
+### 0.6.0a1 (STAGING)
+
+- Support for end-to-end encryption via `DAVE`.
+
+## 0.5.0 (January 18th, 2026)
 
 - New `utils` module with `YouTube` UX methods.
 - New `autoplay` parameter to player `add_queue` method.
@@ -26,7 +30,7 @@ For full details, click a specific version.
     5. `MemberMoveVoiceEvent` renamed to `MemberMoveEvent`; `new_channel_id` attribute renamed to `channel_id`.
     6. `MemberLeaveVoiceEvent` renamed to `MemberLeaveEvent`.
 
-[View full changelog ->](0.5.0a1.md)
+[View full changelog ->](0.5.0.md)
 
 !!! warning "Contains breaking changes"
 
