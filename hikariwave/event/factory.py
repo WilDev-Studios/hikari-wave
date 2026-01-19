@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from hikariwave.event.events.base import WaveEvent
 from typing import (
-    Type,
     TYPE_CHECKING,
     TypeVar,
 )
@@ -14,7 +13,7 @@ if TYPE_CHECKING:
 
 __all__ = ()
 
-WaveEventType = TypeVar('E', bound=WaveEvent)
+WaveEventType = TypeVar("WaveEvent", bound=WaveEvent)
 
 class EventFactory:
     """Responsible for emitting and handling all supplemental events."""
@@ -35,13 +34,13 @@ class EventFactory:
         
         self._bot: hikari.GatewayBot = bot
     
-    def emit(self, event: Type[WaveEventType], **kwargs: Any) -> None:
+    def emit(self, event: type[WaveEventType], **kwargs: Any) -> None:
         """
         Dispatch an event.
         
         Parameters
         ----------
-        event : Type[WaveEventType]
+        event : type[WaveEvent]
             The `hikari-wave` event to dispatch.
         kwargs : Any
             The key-value pairs of data to send directly to the event constructor.

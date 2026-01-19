@@ -18,6 +18,13 @@ For full details, click a specific version.
 - Player history, queue, timing, and resume logic fixed.
 - Player can now play previous audio automatically if `IDLE`.
 - FFmpeg zombie processes and buffer leaks fixed.
+- Specific event changes:
+    1. `AudioSecondEvent` renamed to `AudioElapsedEvent`; `second` attribute renamed to `seconds`. New `minutes` and `hours` attribute.
+    2. `BotJoinVoiceEvent` renamed to `BotJoinEvent`.
+    3. `BotLeaveVoiceEvent` renamed to `BotLeaveEvent`.
+    4. `MemberJoinVoiceEvent` renamed to `MemberJoinEvent`.
+    5. `MemberMoveVoiceEvent` renamed to `MemberMoveEvent`; `new_channel_id` attribute renamed to `channel_id`.
+    6. `MemberLeaveVoiceEvent` renamed to `MemberLeaveEvent`.
 
 [View full changelog ->](0.5.0a1.md)
 

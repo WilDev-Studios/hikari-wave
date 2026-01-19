@@ -98,6 +98,8 @@ nav:
       - hikariwave.internal.encrypt: pages/api/internal/encrypt.md
       - hikariwave.internal.error: pages/api/internal/error.md
       - hikariwave.internal.result: pages/api/internal/result.md
+      - hikariwave.internal.signal: pages/api/internal/signal.md
+      - hikariwave.internal.websocket: pages/api/internal/websocket.md
     - hikariwave.networking:
       - hikariwave.networking.gateway: pages/api/networking/gateway.md
       - hikariwave.networking.server: pages/api/networking/server.md
