@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from enum import auto, IntEnum
 from hikariwave.audio.source import AudioSource
 from hikariwave.audio.store import FrameStore
-from hikariwave.event.types import AudioBeginOrigin, WaveEventType
+from hikariwave.event.events.audio import (
+    AudioBeginEvent,
+    AudioElapsedEvent,
+    AudioEndEvent,
+)
+from hikariwave.event.types import AudioBeginOrigin
 from hikariwave.internal.constants import Audio
 from hikariwave.internal.result import Result, ResultReason
 from typing import Any, Callable, Coroutine, TYPE_CHECKING
@@ -19,7 +24,10 @@ import time
 if TYPE_CHECKING:
     from hikariwave.connection import VoiceConnection
 
-__all__ = ("AudioPlayer",)
+__all__ = (
+    "AudioPlaybackState",
+    "AudioPlayer",
+)
 
 logger: logging.Logger = logging.getLogger("hikariwave.player")
 
@@ -58,7 +66,7 @@ class AudioPlayer:
     """Responsible for all audio."""
 
     __slots__ = (
-        "_connection", "_store",
+        "_connection", "_store", "_encoders",
         "_state",
         "_sequence", "_timestamp", "_nonce", "_frames",
         "_queue", "_history", "_priority_source", "_current",
@@ -79,6 +87,7 @@ class AudioPlayer:
         
         self._connection: VoiceConnection = connection
         self._store: FrameStore = FrameStore(self._connection)
+        self._encoders: set[asyncio.Task[None]] = set()
 
         self._state: AudioPlaybackState = AudioPlaybackState.IDLE
 
@@ -103,6 +112,15 @@ class AudioPlayer:
         self._resume_event: asyncio.Event = asyncio.Event()
         self._resume_event.set()
 
+    def _add_to_history(self, source: AudioSource) -> None:
+        if not source:
+            return
+        
+        if self._history and self._history[-1] == source:
+            return
+        
+        self._history.append(source)
+
     def _generate_rtp(self) -> bytes:
         header: bytearray = bytearray(12)
         header[0] = 0x80
@@ -122,35 +140,39 @@ class AudioPlayer:
             setattr(source, "_volume", getattr(source, "_volume", None) or self._volume)
 
             await self._connection._client._ffmpeg.submit(source, self._connection)
-            await self._store.wait()
+            await self._store.wait(frames=5)
             
             self._set_state(AudioPlaybackState.PLAYING)
             await self._connection._gateway.set_speaking(True, self._priority)
             
             self._connection._client._event_factory.emit(
-                WaveEventType.AUDIO_BEGIN,
-                self._connection._channel_id,
-                self._connection._guild_id,
-                source,
-                origin,
+                AudioBeginEvent,
+                audio=source,
+                channel_id=self._connection._channel_id,
+                guild_id=self._connection._guild_id,
+                origin=origin,
             )
 
             frame_duration: float = Audio.FRAME_LENGTH / 1000
-            frames_per_second: int = round(1 / frame_duration)
+            frames_per_second: int = int(1000 / Audio.FRAME_LENGTH)
             last_second: int = -1
 
-            self._frames: int = 0
-            start_time: float = time.perf_counter()
+            start_time: float | None = None
+            MAX_DRIFT: float = 0.050
 
             while not self._stop_event.is_set() and not self._skip_event.is_set():
                 if not self._resume_event.is_set():
-                    await asyncio.sleep(0.01)
-                    continue
+                    await self._resume_event.wait()
+
+                    start_time = time.perf_counter() - (self._frames * frame_duration)
 
                 opus: bytes = await self._store.fetch_frame()
                 if opus is None:
                     completed = True
                     return True
+
+                if start_time is None:
+                    start_time = time.perf_counter()
 
                 header: bytes = self._generate_rtp()
                 encrypted: bytes = self._connection._encryption_mode(
@@ -165,24 +187,35 @@ class AudioPlayer:
                 self._timestamp = (self._timestamp + Audio.SAMPLES_PER_FRAME) % Audio.BIT_32U
                 self._frames += 1
                 
+                now: float = time.perf_counter()
                 target: float = start_time + (self._frames * frame_duration)
-                sleep: float = target - time.perf_counter()
+                drift: float = target - now
 
-                if sleep > 0:
-                    await asyncio.sleep(sleep)
-                elif sleep < -0.020:
-                    logger.debug(f"Frame {self._frames} is {-sleep:.3f}s behind schedule")
-                
+                if drift > 0:
+                    if drift > 0.020:
+                        logger.debug(f"Frame {self._frames} is {drift:.3f}s ahead of schedule")
+
+                    await asyncio.sleep(drift)
+                else:
+                    if drift < -0.020:
+                        logger.debug(f"Frame {self._frames} is {-drift:.3f}s behind schedule")
+
+                    if drift < -MAX_DRIFT:
+                        logger.debug("Large frame drift detected, resyncing playback clock")
+                        start_time = now - (self._frames * frame_duration)
+
                 elapsed_seconds: int = self._frames // frames_per_second
                 if elapsed_seconds > last_second:
                     last_second = elapsed_seconds
 
                     self._connection._client._event_factory.emit(
-                        WaveEventType.AUDIO_SECOND,
-                        self._connection._channel_id,
-                        self._connection._guild_id,
-                        source,
-                        elapsed_seconds,
+                        AudioElapsedEvent,
+                        audio=source,
+                        channel_id=self._connection._channel_id,
+                        guild_id=self._connection._guild_id,
+                        hours=elapsed_seconds // 3600,
+                        minutes=elapsed_seconds // 60,
+                        seconds=elapsed_seconds,
                     )
         finally:
             if self._state == AudioPlaybackState.BUFFERING:
@@ -216,21 +249,23 @@ class AudioPlayer:
                 completed: bool = await self._play_internal(source, origin)
                 await self._connection._gateway.set_speaking(False)
 
+                self._frames = 0
+
                 async with self._lock:
                     self._set_state(AudioPlaybackState.STOPPING)
 
                     if completed:
-                        self._history.append(source)
+                        self._add_to_history(self._current)
 
                     ended: AudioSource = self._current
                     self._current = None
                     self._set_state(AudioPlaybackState.IDLE)
 
                     self._connection._client._event_factory.emit(
-                        WaveEventType.AUDIO_END,
-                        self._connection._channel_id,
-                        self._connection._guild_id,
-                        ended,
+                        AudioEndEvent,
+                        audio=ended,
+                        channel_id=self._connection._channel_id,
+                        guild_id=self._connection._guild_id,
                     )
         except asyncio.CancelledError:
             pass
@@ -247,7 +282,7 @@ class AudioPlayer:
         
         self._state = state
 
-    async def add_queue(self, source: AudioSource) -> Result:
+    async def add_queue(self, source: AudioSource, *, autoplay: bool = True) -> Result:
         """
         Add an audio source to the queue.
         
@@ -255,6 +290,8 @@ class AudioPlayer:
         ----------
         source : AudioSource
             The source of the audio to add.
+        autoplay : bool
+            If the player should play this source if there's no audio currently loaded.
 
         Returns
         -------
@@ -274,7 +311,7 @@ class AudioPlayer:
         async with self._lock:
             self._queue.append(QueuedAudio(source, AudioBeginOrigin.QUEUE))
 
-            if not self._player_task or self._player_task.done():
+            if autoplay and not self._player_task or self._player_task.done():
                 self._player_task = asyncio.create_task(self._player_loop())
         
         return Result.succeeded()
@@ -352,15 +389,16 @@ class AudioPlayer:
         """
 
         async with self._lock:
-            if self._current is None:
+            if not self._current:
                 return Result.failed(ResultReason.NO_TRACK)
     
-            if len(self._queue) < 1:
+            if not self._queue:
                 return Result.failed(ResultReason.EMPTY_QUEUE)
 
-            if self._current:
-                self._skip_event.set()
-                self._resume_event.set()
+            self._add_to_history(self._current)
+
+            self._skip_event.set()
+            self._resume_event.set()
         
         return Result.succeeded()
 
@@ -415,7 +453,7 @@ class AudioPlayer:
         async with self._lock:
             self._priority_source = source
 
-            if self._current is not None:
+            if self._current:
                 self._skip_event.set()
 
             if not self._player_task or self._player_task.done():
@@ -434,15 +472,21 @@ class AudioPlayer:
         """
 
         async with self._lock:
-            if len(self._history) < 1:
+            if not self._history:
                 return Result.failed(ResultReason.EMPTY_HISTORY)
             
+            if self._current:
+                self._queue.appendleft(QueuedAudio(self._current, AudioBeginOrigin.QUEUE))
+
             previous: AudioSource = self._history.pop()
             self._queue.appendleft(QueuedAudio(previous, AudioBeginOrigin.HISTORY))
 
             if self._current:
                 self._skip_event.set()
                 self._resume_event.set()
+            
+            if not self._player_task or self._player_task.done():
+                self._player_task = asyncio.create_task(self._player_loop())
             
         return Result.succeeded()
 
@@ -625,6 +669,12 @@ class AudioPlayer:
             self._priority_source = None
             self._current = None
         
+        for task in list(self._encoders):
+            task.cancel()
+        
+        await asyncio.gather(*self._encoders, return_exceptions=True)
+        self._encoders.clear()
+
         await self._connection._gateway.set_speaking(False, self._priority)
         await self._store.clear()
 

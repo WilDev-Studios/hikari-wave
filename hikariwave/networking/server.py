@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from hikariwave.internal.constants import Audio
-from hikariwave.event.types import VoiceWarningType, WaveEventType
+from hikariwave.event.events.member import (
+    MemberSpeechEvent,
+    MemberStartSpeakingEvent,
+    MemberStopSpeakingEvent,
+)
+from hikariwave.event.events.voice import VoiceWarningEvent
+from hikariwave.event.types import VoiceWarningType
 from hikariwave.internal.error import ServerError
 from typing import Callable, TypeAlias, TYPE_CHECKING
 
@@ -84,6 +90,15 @@ class Protocol(asyncio.DatagramProtocol):
             return 
 
 class RTPStats:
+    __slots__ = (
+        "_prev_arrival",
+        "_prev_timestamp",
+        "_jitter",
+        "_last_seq",
+        "_received",
+        "_lost",
+    )
+    
     def __init__(self) -> None:
         self._prev_arrival: float | None = None
         self._prev_timestamp: int | None = None
@@ -212,10 +227,10 @@ class VoiceServer:
         guild: hikari.Snowflake = channel.guild_id
 
         self._connection._client._event_factory.emit(
-            WaveEventType.MEMBER_START_SPEAKING,
-            channel_id,
-            guild,
-            channel.members[user_id],
+            MemberStartSpeakingEvent,
+            channel_id=channel_id,
+            guild_id=guild,
+            member=channel.members[user_id],
         )
         
         channel.active.add(user_id)
@@ -244,18 +259,18 @@ class VoiceServer:
                     channel.active.remove(user_id)
 
                     self._connection._client._event_factory.emit(
-                        WaveEventType.MEMBER_STOP_SPEAKING,
-                        channel,
-                        guild,
-                        member,
+                        MemberStopSpeakingEvent,
+                        channel_id=channel,
+                        guild_id=guild,
+                        member=member,
                     )
                     if self._connection._config._record:
                         self._connection._client._event_factory.emit(
-                            WaveEventType.MEMBER_SPEECH,
-                            channel,
-                            guild,
-                            member,
-                            self._buffers.pop(ssrc, []),
+                            MemberSpeechEvent,
+                            audio=self._buffers.pop(ssrc, []),
+                            channel_id=channel,
+                            guild_id=guild,
+                            member=member,
                         )
                 
                 for ssrc, stats in self._stats.items():
@@ -278,11 +293,11 @@ class VoiceServer:
                         guild_id = channel.guild_id
 
                         self._connection._client._event_factory.emit(
-                            WaveEventType.VOICE_WARNING,
-                            channel_id,
-                            guild_id,
-                            VoiceWarningType.JITTER,
-                            jitter,
+                            VoiceWarningEvent,
+                            channel_id=channel_id,
+                            details=jitter,
+                            guild_id=guild_id,
+                            type=VoiceWarningType.JITTER,
                         )
                     
                     if loss_rate > Audio.MAX_PACKET_LOSS:
@@ -292,11 +307,11 @@ class VoiceServer:
                         guild_id = channel.guild_id
 
                         self._connection._client._event_factory.emit(
-                            WaveEventType.VOICE_WARNING,
-                            channel_id,
-                            guild_id,
-                            VoiceWarningType.PACKET_LOSS,
-                            loss_rate,
+                            VoiceWarningEvent,
+                            channel_id=channel_id,
+                            details=loss_rate,
+                            guild_id=guild_id,
+                            type=VoiceWarningType.PACKET_LOSS,
                         )
 
                 await asyncio.sleep(0.05)

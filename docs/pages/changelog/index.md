@@ -7,9 +7,30 @@ For full details, click a specific version.
     If you ever come across an issue during our `alpha`/`beta` stage, **please** notify us ASAP.
     We want to weed out as much issues as possible before our `1.0.0` release.
 
-## 0.4.0 (In Progress)
+## 0.5.0 (In Progress)
 
-### 0.4.0a1 (January 10th, 2026)
+### 0.5.0a1 (January 18th, 2026)
+
+- New `utils` module with `YouTube` UX methods.
+- New `autoplay` parameter to player `add_queue` method.
+- Replaced `future` and `wait_for_url` with `resolve_metadata` and `resolve_media` in `YouTubeAudioSource`.
+- Generic performance improvements and refactors.
+- Player history, queue, timing, and resume logic fixed.
+- Player can now play previous audio automatically if `IDLE`.
+- FFmpeg zombie processes and buffer leaks fixed.
+- Specific event changes:
+    1. `AudioSecondEvent` renamed to `AudioElapsedEvent`; `second` attribute renamed to `seconds`. New `minutes` and `hours` attribute.
+    2. `BotJoinVoiceEvent` renamed to `BotJoinEvent`.
+    3. `BotLeaveVoiceEvent` renamed to `BotLeaveEvent`.
+    4. `MemberJoinVoiceEvent` renamed to `MemberJoinEvent`.
+    5. `MemberMoveVoiceEvent` renamed to `MemberMoveEvent`; `new_channel_id` attribute renamed to `channel_id`.
+    6. `MemberLeaveVoiceEvent` renamed to `MemberLeaveEvent`.
+
+[View full changelog ->](0.5.0a1.md)
+
+!!! warning "Contains breaking changes"
+
+## 0.4.0 (January 10th, 2026)
 
 - New `AudioBeginEvent` `origin` property.
 - New `YouTubeAudioSource` `duration` property.
@@ -20,7 +41,7 @@ For full details, click a specific version.
 - New `MemberSpeechEvent` dispatched when members are speaking.
 - New `AudioPlayer` `clear_history` method.
 
-[View full changelog ->](0.4.0a1.md)
+[View full changelog ->](0.4.0.md)
 
 ## 0.3.0 (December 31st, 2025)
 

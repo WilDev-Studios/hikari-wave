@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 
 __all__ = ()
 
@@ -25,33 +25,37 @@ class Audio:
 class CloseCode(IntEnum):
     """Collection of a voice close event codes."""
 
-    UNKNOWN_OPCODE = 4001
+    NORMAL                       = 1000
+    """Closed normally."""
+    GOING_AWAY                   = 1001
+    """Closed with `going away`."""
+    UNKNOWN_OPCODE               = 4001
     """Client sent an invalid opcode."""
-    FAILED_TO_DECODE_PAYLOAD = 4002
+    FAILED_TO_DECODE_PAYLOAD     = 4002
     """Client send an invalid payload during IDENTIFY."""
-    NOT_AUTHENTICATED = 4003
+    NOT_AUTHENTICATED            = 4003
     """Client sent a payload before IDENTIFY."""
-    AUTHENTICATION_FAILED = 4004
+    AUTHENTICATION_FAILED        = 4004
     """Client sent an incorrect token in IDENTIFY."""
-    ALREADY_AUTHENTICATED = 4005
+    ALREADY_AUTHENTICATED        = 4005
     """Client sent more than one IDENTIFY."""
-    SESSION_NO_LONGER_VALID = 4006
+    SESSION_NO_LONGER_VALID      = 4006
     """Client session is not longer valid. Reconnection required."""
-    SESSION_TIMEOUT = 4009
+    SESSION_TIMEOUT              = 4009
     """Client session timed out. Reconnection required."""
-    SERVER_NOT_FOUND = 4011
+    SERVER_NOT_FOUND             = 4011
     """Client attempted to connect to a server that wasn't found."""
-    UNKNOWN_PROTOCOL = 4012
+    UNKNOWN_PROTOCOL             = 4012
     """Client sent a protocol that is unrecognized by the server."""
-    DISCONNECTED = 4014
+    DISCONNECTED                 = 4014
     """Client was disconnected. No reconnection."""
-    VOICE_SERVER_CRASHED = 4015
+    VOICE_SERVER_CRASHED         = 4015
     """Server crashed. Resume required."""
-    UNKNOWN_ENCRYPTION_MODE = 4016
+    UNKNOWN_ENCRYPTION_MODE      = 4016
     """Client sent an unrecognized encryption method."""
-    BAD_REQUEST = 4020
+    BAD_REQUEST                  = 4020
     """Client send a malformed request."""
-    DISCONNECTED_RATE_LIMITED = 4021
+    DISCONNECTED_RATE_LIMITED    = 4021
     """Client was disconnected due to rate limit being exceeded. No reconnection."""
     DISCONNECTED_CALL_TERMINATED = 4022
     """Client was disconnected due to call being terminated. No reconnection."""
@@ -61,6 +65,8 @@ class Constants:
 
     DAVE_VERSION: int = 0
     """The maximum supported `DAVE` version."""
+    GATEWAY_VERSION: int = 8
+    """The Discord voice gateway version this library implements."""
 
 class Opcode(IntEnum):
     """Collection of voice gateway operation codes."""
@@ -87,16 +93,8 @@ class Opcode(IntEnum):
     """`SERVER/JSON` - Acknowledge a successful session resume."""
     CLIENTS_CONNECT = 11
     """`SERVER/JSON` - One or more clients have connection to the voice channel."""
-    UNDOCUMENTED_12 = 12
-    """`SERVER/JSON` - Unknown as of `0.1.0a1`."""
     CLIENT_DISCONNECT = 13
     """`SERVER/JSON` - A client has disconnected from the voice channel."""
-    UNDOCUMENTED_15 = 15
-    """`SERVER/JSON` - Unknown as of `0.0.1a1`."""
-    UNDOCUMENTED_18 = 18
-    """`SERVER/JSON` - Unknown as of `0.0.1a1` - Contains user flags of user who joined channel."""
-    UNDOCUMENTED_20 = 20
-    """`SERVER/JSON` - Unknown as of `0.0.1a1` - Contains user platform of user who joined channel."""
     DAVE_PREPARE_TRANSITION = 21
     """`SERVER/JSON` - A downgrade from the DAVE protocol is upcoming."""
     DAVE_EXECUTE_TRANSITION = 22
@@ -119,3 +117,13 @@ class Opcode(IntEnum):
     """`SERVER/BYTE` - MLS Welcome to group for upcoming transition."""
     DAVE_MLS_INVALID_COMMIT_WELCOME = 31
     """`CLIENT/JSON` - Flag invalid commit or welcome, request re-add."""
+
+class SpeakingFlag(IntFlag):
+    """Collection of voice gateway `SPEAKING` flags."""
+
+    VOICE      = 1 << 0
+    """Set state to actively speaking."""
+    SOUNDSHARE = 1 << 1
+    """Sharing contextual audio with no speaking indicator."""
+    PRIORITY   = 1 << 2
+    """Hoist audio volume and lower other user volumes."""

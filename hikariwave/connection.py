@@ -3,9 +3,9 @@ from __future__ import annotations
 from enum import auto, IntEnum
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.config import Config
-from hikariwave.event.types import WaveEventType
+from hikariwave.internal.constants import Constants, Opcode
 from hikariwave.internal.encrypt import Encrypt
-from hikariwave.networking.gateway import Opcode, ReadyPayload, SessionDescriptionPayload, VoiceGateway
+from hikariwave.networking.gateway import GatewayReadyPayload, GatewaySessionDescriptionPayload, VoiceGateway
 from hikariwave.networking.server import VoiceServer
 from typing import Callable, TYPE_CHECKING
 
@@ -85,8 +85,8 @@ class VoiceConnection:
             self._session_id,
             self._token,
         )
-        self._gateway.set_callback(Opcode.READY, self._gateway_ready)
-        self._gateway.set_callback(Opcode.SESSION_DESCRIPTION, self._gateway_session_description)
+        self._gateway.set_callback(Opcode.READY, self.__gateway_ready)
+        self._gateway.set_callback(Opcode.SESSION_DESCRIPTION, self.__gateway_session_description)
         self._ready: asyncio.Event = asyncio.Event()
         self._state: ConnectionStatus = ConnectionStatus.NEW
 
@@ -97,8 +97,54 @@ class VoiceConnection:
 
         self._player: AudioPlayer = AudioPlayer(self)
 
-        self._client._bot.subscribe(hikari.VoiceServerUpdateEvent, self._server_update)
-    
+        self._client._bot.subscribe(hikari.VoiceServerUpdateEvent, self.__server_update)
+
+    async def __gateway_ready(self, payload: GatewayReadyPayload) -> None:
+        self._ssrc = payload.ssrc
+        
+        chosen_mode: str = None
+        for mode in payload.modes:
+            if mode not in Encrypt.SUPPORTED:
+                continue
+
+            chosen_mode = mode
+            break
+
+        if not chosen_mode:
+            error: str = "No supported encryption method was found/implemented"
+            raise RuntimeError(error)
+
+        ip, port = await self._server.connect(payload.ip, payload.port, self._ssrc)
+
+        await self._gateway.select_protocol(ip, port, chosen_mode)
+
+    async def __gateway_session_description(self, payload: GatewaySessionDescriptionPayload) -> None:
+        self._encryption_mode = getattr(Encrypt, f"encrypt_{payload.mode}")
+        self._decryption_mode = getattr(Encrypt, f"decrypt_{payload.mode}")
+        self._secret = payload.secret
+        self._state = ConnectionStatus.CONNECTED
+
+        self._ready.set()
+
+        if not self._player._resume_event.is_set() and self._player._current:
+            await self._player.resume()
+
+    async def __server_update(self, event: hikari.VoiceServerUpdateEvent) -> None:
+        if not event.endpoint:
+            await self._disconnect()
+            return
+        
+        self._endpoint = event.endpoint
+        self._gateway = VoiceGateway(
+            self,
+            self._guild_id,
+            self._channel_id,
+            self._client._bot.get_me().id,
+            self._session_id,
+            event.token,
+        )
+        await self._connect()
+
     async def _connect(self) -> None:
         if self._state in (ConnectionStatus.CONNECTED, ConnectionStatus.CONNECTING):
             return
@@ -107,7 +153,7 @@ class VoiceConnection:
         self._ready.clear()
 
         try:
-            await self._gateway.connect(f"{self._endpoint}/?v=8")
+            await self._gateway.connect(f"{self._endpoint}/?v={Constants.GATEWAY_VERSION}")
             await self._ready.wait()
 
             if self._state == ConnectionStatus.CONNECTING:
@@ -131,84 +177,6 @@ class VoiceConnection:
         if self._gateway:
             await self._gateway.disconnect()
 
-    async def _gateway_ready(self, payload: ReadyPayload) -> None:
-        self._ssrc = payload.ssrc
-        
-        chosen_mode: str = None
-        for mode in payload.modes:
-            if mode not in Encrypt.SUPPORTED:
-                continue
-
-            chosen_mode = mode
-            break
-
-        if not chosen_mode:
-            error: str = "No supported encryption method was found/implemented"
-            raise RuntimeError(error)
-
-        ip, port = await self._server.connect(payload.ip, payload.port, self._ssrc)
-
-        await self._gateway.select_protocol(ip, port, chosen_mode)
-
-    async def _gateway_reconnect(self) -> None:
-        if self._state == ConnectionStatus.RECONNECTING:
-            return
-        
-        self._state = ConnectionStatus.RECONNECTING
-        self._ready.clear()
-
-        if self._player and self._player.is_playing:
-            await self._player.pause()
-    
-        await self._server.disconnect()
-        await self._gateway.disconnect()
-
-        self._server = VoiceServer(self)
-        self._gateway = VoiceGateway(
-            self,
-            self._guild_id,
-            self._channel_id,
-            self._client.bot.get_me().id,
-            self._session_id,
-            self._token,
-        )
-        self._gateway.set_callback(Opcode.READY, self._gateway_ready)
-        self._gateway.set_callback(Opcode.SESSION_DESCRIPTION, self._gateway_session_description)
-        await self._gateway.connect(f"{self._endpoint}/?v=8")
-
-        self._client._event_factory.emit(
-            WaveEventType.VOICE_RECONNECT,
-            self._channel_id,
-            self._guild_id,
-        )
-
-    async def _gateway_session_description(self, payload: SessionDescriptionPayload) -> None:
-        self._encryption_mode = getattr(Encrypt, f"encrypt_{payload.mode}")
-        self._decryption_mode = getattr(Encrypt, f"decrypt_{payload.mode}")
-        self._secret = payload.secret
-        self._state = ConnectionStatus.CONNECTED
-
-        self._ready.set()
-
-        if not self._player._resume_event.is_set() and self._player._current:
-            await self._player.resume()
-
-    async def _server_update(self, event: hikari.VoiceServerUpdateEvent) -> None:
-        if not event.endpoint:
-            await self._disconnect()
-            return
-        
-        self._endpoint = event.endpoint
-        self._gateway = VoiceGateway(
-            self,
-            self._guild_id,
-            self._channel_id,
-            self._client._bot.get_me().id,
-            self._session_id,
-            event.token,
-        )
-        await self._connect()
-
     @property
     def channel_id(self) -> hikari.Snowflakeish:
         """The ID of the channel this connection is in."""
@@ -224,7 +192,7 @@ class VoiceConnection:
         Disconnect from the current channel.
         """
         
-        self._client._bot.unsubscribe(hikari.VoiceServerUpdateEvent, self._server_update)
+        self._client._bot.unsubscribe(hikari.VoiceServerUpdateEvent, self.__server_update)
         await self._client.disconnect(self._guild_id)
     
     @property
@@ -236,10 +204,10 @@ class VoiceConnection:
     def latency(self) -> float | None:
         """Get the heartbeat latency of this connection with Discord's gateway, if connected."""
         
-        if not self._gateway._last_heartbeat_ack:
+        if not self._gateway._heartbeat_ack:
             return None
         
-        return self._gateway._last_heartbeat_ack - self._gateway._last_heartbeat_sent
+        return self._gateway._heartbeat_ack - self._gateway._heartbeat_sent
     
     @property
     def player(self) -> AudioPlayer:

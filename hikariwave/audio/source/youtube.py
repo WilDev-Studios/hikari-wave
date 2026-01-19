@@ -10,9 +10,13 @@ from hikariwave.config import (
     validate_channels,
     validate_volume,
 )
+from typing import TYPE_CHECKING
 from yt_dlp.YoutubeDL import YoutubeDL as YT
 
 import asyncio
+
+if TYPE_CHECKING:
+    from typing import Any
 
 __all__ = ("YouTubeAudioSource",)
 
@@ -39,7 +43,7 @@ class YouTubeAudioSource(AudioSource):
         bitrate: str | None = None,
         channels: int | None = None,
         name: str | None = None,
-        volume: float | str | None = None
+        volume: float | str | None = None,
     ) -> None:
         """
         Create a YouTube audio source.
@@ -59,13 +63,11 @@ class YouTubeAudioSource(AudioSource):
         
         Important
         ---------
-        This source resolves the provided YouTube URL into an internal, direct media URL using `yt-dlp`.
-        This resolution is performed asynchronously in the background during construction.
-
-        The resolved media URL may not be immediately available after instantiation. Consumers that require guaranteed availability should `await` the source's completion mechanism (e.g. `await source.wait_for_url()`).
-
         This source depends on YouTube's undocumented internal APIs via `yt-dlp`. As a result, it is best-effort and may break without notice if YouTube changes its internal behavior.
         Functionality may require updating the pinned `yt-dlp` version to restore compatibility.
+
+        Basic video metadata is extracted on construction of this source. Using `resolve_metadata` will ensure this metadata is retrieved before using the `metadata` property.
+        Enhanced video metadata, like media URLs, is extracted on request internally by the player (to ensure non-expired timestamps and nonces). Using `resolve_media` does this as well.
 
         Raises
         ------
@@ -95,65 +97,110 @@ class YouTubeAudioSource(AudioSource):
         self._headers: dict[str, str] = {}
         self._metadata: dict[str] = {}
 
-        loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-        self._future: asyncio.Task[None] = loop.create_task(self._extract_metadata(loop))
+        loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
+        self._metadata_task: asyncio.Task[None] | None = loop.create_task(self._extract_metadata())
 
-    async def _extract_metadata(self, loop: asyncio.AbstractEventLoop) -> None:
-        def extract() -> None:
+        self._media_task: asyncio.Task[None] | None = None
+
+    async def _extract_media(self) -> None:
+        def extract() -> dict[str, Any]:
             with YT({
                 "quiet": True,
                 "no_warnings": True,
-                "format": "bestaudio[ext=m4a]/bestaudio/best",
-                "simulate": True,
+                "format": "bestaudio",
                 "noplaylist": True,
-                "extract_flat": True,
-                "http_headers": {},
-                "force_generic_extractor": False,
-                "http2": True,
-                "writesubtitles": False,
-                "writeautomaticsub": False,
-                "writeinfojson": False,
-                "skip_download": True,
             }) as ydl:
-                self._metadata = ydl.extract_info(self._url, False)
-                self._content = self._metadata["url"]
-                self._headers = self._metadata.get("http_headers", {})
-                self._duration = self._metadata.get("duration")
+                return ydl.extract_info(self._url, False)
+        
+        info: dict[str, Any] = await asyncio.to_thread(extract)
 
-        await loop.run_in_executor(None, extract)
+        self._content = info["url"]
+        self._headers = info.get("http_headers", {})
 
-    @staticmethod
-    def _format_headers(headers: dict[str, str]) -> str:
-        return "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+    async def _extract_metadata(self) -> None:
+        def extract() -> dict[str, Any]:
+            with YT({
+                "quiet": True,
+                "no_warnings": True,
+                "extract_flat": True,
+                "simulate": True,
+                "skip_download": True,
+                "noplaylist": True,
+            }) as ydl:
+                return ydl.extract_info(self._url, False)
+
+        info: dict[str, Any] = await asyncio.to_thread(extract)
+
+        self._metadata = info
+        self._duration = info.get("duration")
 
     @property
     def duration(self) -> float | None:
-        """The duration of the media source URL, if discovered - Wait for the source `future` property to finish to attain."""
+        """The duration of the media source URL, if discovered - Use `resolve_metadata` or `resolve_media` to attain if not discovered."""
         return self._duration
 
     @property
-    def metadata(self) -> dict[str, str]:
-        """The metadata of the YouTube media provided, if discovered - Wait for the source `future` property to finish to attain."""
+    def metadata(self) -> dict[str, Any]:
+        """The metadata of the YouTube media provided, if discovered - Use `resolve_metadata` or `resolve_media` to attain if not discovered."""
         return self._metadata.copy()
 
-    @property
-    def future(self) -> asyncio.Task[None]:
-        """The future that will be completed when the internal media URL is discovered."""
-        return self._future
+    async def resolve_media(self, force: bool = False) -> str:
+        """
+        Resolve the video's media URL and enhanced metadata.
+        
+        Parameters
+        ----------
+        force : bool
+            If already previously resolved, re-resolve and overwrite the metadata.
+
+        Returns
+        -------
+        str
+            The internal video media URL used for playback.
+        """
+
+        if self._content:
+            return self.url_media
+        
+        if self._media_task:
+            await self._media_task
+            return self.url_media
+        
+        loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+        self._media_task = loop.create_task(self._extract_media())
+        await self._media_task
+
+        return self.url_media
+
+    async def resolve_metadata(self) -> dict[str, Any]:
+        """
+        Resolve the video's basic metadata.
+        
+        Returns
+        -------
+        dict[str, Any]
+            The metadata of this video, once discovered.
+        """
+        
+        if self._metadata:
+            return self.metadata
+        
+        if self._metadata_task:
+            await self._metadata_task
+            return self.metadata
+        
+        loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
+        self._metadata_task = loop.create_task(self._extract_metadata())
+        await self._metadata_task
+
+        return self.metadata
 
     @property
     def url_media(self) -> str | None:
-        """The media source URL that the YouTube URL points to, if discovered - Wait for the source `future` property to finish to attain."""
+        """The media source URL that the YouTube URL points to, if discovered - Use `resolve_media` to attain if not discovered."""
         return self._content
 
     @property
     def url_youtube(self) -> str:
         """The URL to the audio source."""
         return self._url
-    
-    async def wait_for_url(self) -> str:
-        """Waits for extraction of the internal media URL, if needed, then returns that URL."""
-        if self._content is None:
-            await self._future
-        
-        return self._content

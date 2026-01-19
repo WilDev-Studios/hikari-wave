@@ -85,7 +85,12 @@ nav:
     - hikariwave.config: pages/api/config.md
     - hikariwave.connection: pages/api/connection.md
     - hikariwave.event:
-      - hikariwave.event.events: pages/api/event/events.md
+      - hikariwave.event.events:
+        - hikariwave.event.events.audio: pages/api/event/events/audio.md
+        - hikariwave.event.events.base: pages/api/event/events/base.md
+        - hikariwave.event.events.bot: pages/api/event/events/bot.md
+        - hikariwave.event.events.member: pages/api/event/events/member.md
+        - hikariwave.event.events.voice: pages/api/event/events/voice.md
       - hikariwave.event.factory: pages/api/event/factory.md
       - hikariwave.event.types: pages/api/event/types.md
     - hikariwave.internal:
@@ -93,12 +98,17 @@ nav:
       - hikariwave.internal.encrypt: pages/api/internal/encrypt.md
       - hikariwave.internal.error: pages/api/internal/error.md
       - hikariwave.internal.result: pages/api/internal/result.md
+      - hikariwave.internal.signal: pages/api/internal/signal.md
+      - hikariwave.internal.websocket: pages/api/internal/websocket.md
     - hikariwave.networking:
       - hikariwave.networking.gateway: pages/api/networking/gateway.md
       - hikariwave.networking.server: pages/api/networking/server.md
+    - hikariwave.utils:
+      - hikariwave.utils.youtube: pages/api/utils/youtube.md
   - Changelog:
     - Index: pages/changelog/index.md
-    - 0.4.0a1 (1/10/2026): pages/changelog/0.4.0a1.md
+    - 0.5.0a1 (1-18-2026): pages/changelog/0.5.0a1.md
+    - 0.4.0 (01/10/26-01/10/26): pages/changelog/0.4.0.md
     - 0.3.0 (12/30/25-12/31/25): pages/changelog/0.3.0.md
     - 0.2.0 (12/21/25-12/21/25): pages/changelog/0.2.0.md
     - 0.1.0 (12/20/25-12/21/25): pages/changelog/0.1.0.md
