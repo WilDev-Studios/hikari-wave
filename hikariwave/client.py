@@ -108,7 +108,7 @@ class VoiceClient:
         self._states: dict[MemberID, tuple[Deafened, Muted]] = {}
 
         self._event_factory: EventFactory = EventFactory(self._bot)
-        self._ffmpeg: FFmpegPool = FFmpegPool()
+        self._ffmpeg: FFmpegPool = FFmpegPool(self._config._ffmpeg._max_core, self._config._ffmpeg._max_total)
 
         if os.path.exists("wavecache"): shutil.rmtree("wavecache")
     

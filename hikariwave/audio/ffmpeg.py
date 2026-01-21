@@ -293,7 +293,7 @@ class FFmpegPool:
         "_available", "_unavailable",
     )
 
-    def __init__(self, max_per_core: int = 2, max_global: int = 16) -> None:
+    def __init__(self, max_per_core: int, max_global: int) -> None:
         """
         Create a FFmpeg process pool.
         

@@ -208,11 +208,48 @@ class BufferConfig:
         """The frame storage buffer mode."""
         return self._mode
 
+class FFmpegConfig:
+    """Configure the FFmpeg system."""
+
+    __slots__ = ("_max_core", "_max_total",)
+
+    def __init__(self, max_per_core: int = 1, max_total: int = 8) -> None:
+        """
+        Create a new `FFmpeg` configuration. This configuration only affects the global state of the voice system, not per-connection.
+        
+        Parameters
+        ----------
+        max_per_core : int
+            The maximum amount of spawned `FFmpeg` processes per logical CPU/processor core.
+        max_total : int
+            The maximum amount of spawned `FFmpeg` processes that can exist at any one time.
+        """
+
+        self._max_core: int = max_per_core
+        self._max_total: int = max_total
+    
+    @property
+    def max_per_core(self) -> int:
+        """The maximum amount of spawned `FFmpeg` processes per logic CPU/processor core."""
+        return self._max_core
+    
+    @property
+    def max_total(self) -> int:
+        """The maximum amount of spawned `FFmpeg` processes that can exist at any one time."""
+        return self._max_total
+
 class Config:
     """Global or per-connection configuration settings."""
 
     __slots__ = (
-        "_bitrate", "_buffer", "_channels", "_max_history", "_max_queue", "_record", "_volume",
+        "_bitrate",
+        "_buffer",
+        "_channels",
+        "_ffmpeg",
+        "_max_history",
+        "_max_queue",
+        "_record",
+        "_volume",
     )
 
     def __init__(
@@ -221,6 +258,7 @@ class Config:
         bitrate: str = "96k",
         buffer: BufferConfig = None,
         channels: int = 2,
+        ffmpeg: FFmpegConfig = None,
         max_history: int = None,
         max_queue: int = None,
         record: bool = False,
@@ -237,6 +275,8 @@ class Config:
             If provided, the frame storage buffer configuration.
         channels : int
             If provided, the amount of audio channels that are used.
+        ffmpeg : FFmpegConfig
+            If provided, the `FFmpeg` system configuration.
         max_history : int
             If provided, the maximum amount of audio sources recorded in audio player history.
         max_queue : int
@@ -252,6 +292,7 @@ class Config:
             - If `bitrate` is provided and is not `str`.
             - If `buffer` is provided and is not `BufferConfig`.
             - If `channels` is provided and is not `int`.
+            - If `ffmpeg` is provided and is not `FFmpegConfig`.
             - If `max_history` is provided and is not `int`.
             - If `max_queue` is provided and is not `int`.
             - If `record` is provided and is not `bool`.
@@ -266,6 +307,10 @@ class Config:
 
         if buffer is not None and not isinstance(buffer, BufferConfig):
             error: str = "Provided buffer must be `BufferConfig`"
+            raise TypeError(error)
+    
+        if ffmpeg is not None and not isinstance(ffmpeg, FFmpegConfig):
+            error: str = "Provided ffmpeg must be `FFmpegConfig`"
             raise TypeError(error)
         
         if max_history is not None:
@@ -293,6 +338,7 @@ class Config:
         self._bitrate: str = validate_bitrate(bitrate)
         self._buffer: BufferConfig = buffer if buffer is not None else BufferConfig()
         self._channels: int = validate_channels(channels)
+        self._ffmpeg: FFmpegConfig = ffmpeg if ffmpeg is not None else FFmpegConfig()
         self._max_history: int | None = max_history
         self._max_queue: int | None = max_queue
         self._record: bool = record
@@ -313,6 +359,11 @@ class Config:
         """The amount of audio channels that are used."""
         return self._channels
     
+    @property
+    def ffmpeg(self) -> FFmpegConfig:
+        """The `FFmpeg` system configuration - Only applicable globally, not per-connection."""
+        return self._ffmpeg
+
     @property
     def max_history(self) -> int | None:
         """If set, the maximum amount of audio sources that can be recorded in audio player history."""
