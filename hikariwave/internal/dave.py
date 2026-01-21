@@ -293,18 +293,18 @@ class DAVEManager:
 
         if old_version != self._protocol_version and self._protocol_version == 0:
             self._downgraded = True
-            logger.info("DAVE protocol downgraded; E2EE disabled")
+            logger.debug("DAVE protocol downgraded; E2EE disabled")
         elif transition_id > 0 and self._downgraded:
             self._downgraded = False
             if self._session:
                 self._session.set_passthrough_mode(True, 10)
             
-            logger.info("DAVE session upgraded")
+            logger.debug("DAVE session upgraded")
         
         self._last_transition_id = transition_id
         self._pending_transitions.pop(transition_id, None)
 
-        logger.info(f"Transition executed: v{old_version} -> v{self._protocol_version}, ID={transition_id}")
+        logger.debug(f"Transition executed: v{old_version} -> v{self._protocol_version}, ID={transition_id}")
 
     async def handle_prepare_epoch(
         self,
@@ -322,7 +322,7 @@ class DAVEManager:
             The MLS epoch identifier.
         """
 
-        logger.info(f"Preparing DAVE epoch transition: TransitionID={transition_id}, EpochID={epoch_id}")
+        logger.debug(f"Preparing DAVE epoch transition: TransitionID={transition_id}, EpochID={epoch_id}")
 
         if epoch_id == 1:
             self.__reinit()
@@ -343,7 +343,7 @@ class DAVEManager:
             The protocol version to transition to.
         """
 
-        logger.info(f"Preparing DAVE protocol downgrade: TransitionID={transition_id}, ProtocolVersion={protocol_version}")
+        logger.debug(f"Preparing DAVE protocol downgrade: TransitionID={transition_id}, ProtocolVersion={protocol_version}")
 
         self._pending_transitions[transition_id] = protocol_version
 

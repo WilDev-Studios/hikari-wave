@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from hikariwave.audio.player import AudioPlayer
+from hikariwave.audio.source.youtube import YouTubeAudioSource
 from typing import TYPE_CHECKING
 from yt_dlp.YoutubeDL import YoutubeDL as YT
 
@@ -206,6 +208,67 @@ class YouTubeSearchResult:
 
 class _YouTubeInternal:
     @staticmethod
+    async def queue_from_playlist(player: AudioPlayer, url: str, limit: int, autoplay: bool) -> list[YouTubeAudioSource]:
+        if not isinstance(player, AudioPlayer):
+            error: str = "Provided player must be `AudioPlayer`"
+            raise TypeError(error)
+        
+        if not isinstance(url, str):
+            error: str = "Provided url must be `str`"
+            raise TypeError(error)
+        
+        if limit is not None:
+            if not isinstance(limit, int):
+                error: str = "Provided limit must be `int`"
+                raise TypeError(error)
+        
+            if limit < 1:
+                error: str = "Provided limit must be at least `1`"
+                raise ValueError(error)
+        
+        if not isinstance(autoplay, bool):
+            error: str = "Provided autoplay must be `bool`"
+            raise TypeError(error)
+
+        if "list=" not in url:
+            error: str = "Provided url must be a valid playlist URL"
+            raise ValueError(error)
+    
+        def extract() -> dict[str, Any]:
+            with YT({"extract_flat": True, "skip_download": True, "quiet": True,}) as ydl:
+                return ydl.extract_info(url, False)
+        
+        info: dict[str, Any] = await asyncio.to_thread(extract)
+        if not info:
+            return []
+        
+        sources: list[YouTubeAudioSource] = []
+        entries: list[dict[str, Any]] = info.get("entries", [])
+
+        for index, entry in enumerate(entries):
+            if limit is not None and index >= limit:
+                break
+
+            video_id: str = entry.get("id") or entry.get("url")
+            if not video_id:
+                continue
+
+            url: str = (
+                video_id
+                if video_id.startswith("http")
+                else f"https://youtube.com/watch?v={video_id}"
+            )
+
+            if entry.get("age_limit", 0) >= 18:
+                continue
+
+            source: YouTubeAudioSource = YouTubeAudioSource(url)
+            sources.append(source)
+        
+        await player.add_queue_bulk(sources, autoplay=autoplay)
+        return sources
+
+    @staticmethod
     def search(query: str, limit: int) -> YouTubeSearchResult | None:
         if not isinstance(query, str):
             error: str = "Provided query must be `str`"
@@ -233,6 +296,41 @@ class _YouTubeInternal:
 
 class YouTube:
     """Utility class containing UX features for `YouTube`."""
+
+    @staticmethod
+    async def queue_from_playlist(player: AudioPlayer, url: str, *, limit: int = None, autoplay: bool = True) -> list[YouTubeAudioSource]:
+        """
+        Queue audio from a YouTube playlist into an audio player queue.
+        
+        Parameters
+        ----------
+        player : AudioPlayer
+            The audio player to queue the audio in.
+        url : str
+            The YouTube playlist URL to add.
+        limit : int
+            If provided, the maximum amount of audio to queue.
+        autoplay : bool 
+            If provided, controls if the player should automatically play the first queued audio if the player isn't playing anything.
+        
+        Returns
+        -------
+        list[YouTubeAudioSource]
+            A reference to all audio added to the queue.
+        
+        Raises
+        ------
+        TypeError
+            - If `player` is not `AudioPlayer`.
+            - If `url` is not `str`.
+            - If `limit` is provided and is not `int`.
+            - If `autoplay` is provided and is not `bool`.
+        ValueError
+            - If `url` is not a valid YouTube playlist URL.
+            - If `limit` is provided and is not at least `1`.
+        """
+
+        return await _YouTubeInternal.queue_from_playlist(player, url, limit, autoplay)
 
     @staticmethod
     async def search(query: str, limit: int = 10) -> YouTubeSearchResult | None:

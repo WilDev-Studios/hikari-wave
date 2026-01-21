@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import auto, IntEnum
 from hikariwave.audio.source import AudioSource
@@ -305,17 +306,75 @@ class AudioPlayer:
         Raises
         ------
         TypeError
-            If the provided source doesn't inherit `AudioSource`.
+            - If the provided source doesn't inherit `AudioSource`.
+            - If `autoplay` is not `bool`.
         """
 
         if not isinstance(source, AudioSource):
             error: str = "Provided audio source doesn't inherit from `AudioSource`"
             raise TypeError(error)
+        
+        if not isinstance(autoplay, bool):
+            error: str = "Provided autoplay must be `bool`"
+            raise TypeError(error)
 
         async with self._lock:
             self._queue.append(QueuedAudio(source, AudioBeginOrigin.QUEUE))
 
-            if autoplay and not self._player_task or self._player_task.done():
+            if autoplay and (not self._player_task or self._player_task.done()):
+                self._player_task = asyncio.create_task(self._player_loop())
+        
+        return Result.succeeded()
+
+    async def add_queue_bulk(self, sources: Iterable[AudioSource], *, autoplay: bool = True) -> Result:
+        """
+        Add a list of audio sources to the queue.
+        
+        Parameters
+        ----------
+        sources : Iterable[AudioSource]
+            The sources of audio to add.
+        autoplay : bool
+            If the player should play the first source if there's no audio currently loaded.
+        
+        Returns
+        -------
+        Result
+            If the operation was successful, with reason provided if otherwise.
+        
+        Raises
+        ------
+        TypeError
+            - If `sources` is not `Iterable` or its contents do not inherit `AudioSource`.
+            - If `autoplay` is not `bool`.
+        ValueError
+            If `sources` is not at least `1` in length.
+        """
+
+        if not isinstance(sources, Iterable):
+            error: str = "Provided sources must be `Iterable`"
+            raise TypeError(error)
+
+        if not isinstance(autoplay, bool):
+            error: str = "Provided autoplay must be `bool`"
+            raise TypeError(error)
+        
+        if not sources:
+            error: str = "Provided sources must be at least `1` in length"
+            raise ValueError(error)
+    
+        valid_sources: list[QueuedAudio] = []
+        for source in sources:
+            if not isinstance(source, AudioSource):
+                error: str = "Provided sources must contain `AudioSource`"
+                raise TypeError(error)
+            
+            valid_sources.append(QueuedAudio(source, AudioBeginOrigin.QUEUE))
+
+        async with self._lock:
+            self._queue.extend(valid_sources)
+
+            if autoplay and (not self._player_task or self._player_task.done()):
                 self._player_task = asyncio.create_task(self._player_loop())
         
         return Result.succeeded()

@@ -12,6 +12,10 @@ For full details, click a specific version.
 ### 0.6.0a1 (STAGING)
 
 - Support for end-to-end encryption via `DAVE`.
+- FFmpeg system now configurable.
+- New player `add_queue_bulk` method.
+- New YouTube utility method `queue_from_playlist`.
+- Various bug fixes.
 
 ## 0.5.0 (January 18th, 2026)
 
