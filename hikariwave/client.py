@@ -30,9 +30,9 @@ __all__ = ("VoiceClient",)
 
 logger: logging.Logger = logging.getLogger("hikari-wave.client")
 
-ChannelID: TypeAlias = hikari.Snowflakeish
-GuildID: TypeAlias = hikari.Snowflakeish
-MemberID: TypeAlias = hikari.Snowflakeish
+ChannelID: TypeAlias = hikari.Snowflake
+GuildID: TypeAlias = hikari.Snowflake
+MemberID: TypeAlias = hikari.Snowflake
 
 Deafened: TypeAlias = bool
 Muted: TypeAlias = bool
@@ -415,7 +415,12 @@ class VoiceClient:
             error: str = "Provided deaf state must be of type `bool`"
             raise TypeError(error)
 
-        return await self._connect(guild_id, channel_id, mute, deaf)
+        return await self._connect(
+            hikari.Snowflake(guild_id),
+            hikari.Snowflake(channel_id),
+            mute,
+            deaf,
+        )
     
     @property
     def connections(self) -> dict[hikari.Snowflake, VoiceConnection]:
@@ -463,7 +468,9 @@ class VoiceClient:
             raise TypeError(error)
         
         if channel_id:
-            guild_id = self._connectionsr[channel_id]
+            guild_id = self._connectionsr[hikari.Snowflake(channel_id)]
+
+        guild_id = hikari.Snowflake(guild_id)
 
         await self._bot.update_voice_state(guild_id, None)
         await self._disconnect(guild_id)
@@ -514,10 +521,10 @@ class VoiceClient:
             raise TypeError(error)
         
         if channel_id:
-            guild_id = self._connectionsr[channel_id]
+            guild_id = self._connectionsr[hikari.Snowflake(channel_id)]
         
         try:
-            return self._connections[guild_id]
+            return self._connections[hikari.Snowflake(guild_id)]
         except KeyError:
             return
     
@@ -591,6 +598,12 @@ class VoiceClient:
             raise TypeError(error)
         
         if old_channel_id:
-            guild_id = self._connectionsr[old_channel_id]
+            guild_id = self._connectionsr[hikari.Snowflake(old_channel_id)]
             
-        return await self._connect(guild_id, channel_id, mute, deaf, True)
+        return await self._connect(
+            hikari.Snowflake(guild_id),
+            hikari.Snowflake(channel_id),
+            mute,
+            deaf,
+            True,
+        )

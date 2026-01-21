@@ -43,8 +43,8 @@ class VoiceConnection:
     def __init__(
         self,
         client: VoiceClient,
-        guild_id: hikari.Snowflakeish,
-        channel_id: hikari.Snowflakeish,
+        guild_id: hikari.Snowflake,
+        channel_id: hikari.Snowflake,
         endpoint: str,
         session_id: str,
         token: str,
@@ -56,9 +56,9 @@ class VoiceConnection:
         ----------
         client : VoiceClient
             The controlling client for all connections and state.
-        guild_id : hikari.Snowflakeish
+        guild_id : hikari.Snowflake
             The ID of the guild the channel is in.
-        channel_id : hikari.Snowflakeish
+        channel_id : hikari.Snowflake
             The ID of the channel to connect to.
         endpoint : str
             The URL of Discord's voice gateway.
@@ -69,8 +69,8 @@ class VoiceConnection:
         """
         
         self._client: VoiceClient = client
-        self._guild_id: hikari.Snowflakeish = guild_id
-        self._channel_id: hikari.Snowflakeish = channel_id
+        self._guild_id: hikari.Snowflake = guild_id
+        self._channel_id: hikari.Snowflake = channel_id
         self._endpoint: str = endpoint
         self._session_id: str = session_id
         self._token: str = token
@@ -178,7 +178,7 @@ class VoiceConnection:
             await self._gateway.disconnect()
 
     @property
-    def channel_id(self) -> hikari.Snowflakeish:
+    def channel_id(self) -> hikari.Snowflake:
         """The ID of the channel this connection is in."""
         return self._channel_id
 
@@ -196,7 +196,7 @@ class VoiceConnection:
         await self._client.disconnect(self._guild_id)
     
     @property
-    def guild_id(self) -> hikari.Snowflakeish:
+    def guild_id(self) -> hikari.Snowflake:
         """The ID of the guild this connection is in."""
         return self._guild_id
 
