@@ -11,7 +11,7 @@ theme:
   palette:
     - scheme: slate
       primary: pink
-      accent: orange
+      accent: cyan
   font:
     text: Inter
     code: Fira Code
@@ -66,52 +66,53 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/WilDev-Studios/hikari-wave
     - icon: fontawesome/brands/discord
-      link: https://discord.gg/4Ggybyy87d
+      link: https://discord.gg/hikari
 
 nav:
   - Home: index.md
   - API Reference:
+    - Index: pages/api/index.md
     - hikariwave.audio:
-      - hikariwave.audio.ffmpeg: pages/api/audio/ffmpeg.md
-      - hikariwave.audio.player: pages/api/audio/player.md
-      - hikariwave.audio.source:
-        - hikariwave.audio.source.base: pages/api/audio/source/base.md
-        - hikariwave.audio.source.buffer: pages/api/audio/source/buffer.md
-        - hikariwave.audio.source.file: pages/api/audio/source/file.md
-        - hikariwave.audio.source.url: pages/api/audio/source/url.md
-        - hikariwave.audio.source.youtube: pages/api/audio/source/youtube.md
-      - hikariwave.audio.store: pages/api/audio/store.md
+      - ~.ffmpeg: pages/api/audio/ffmpeg.md
+      - ~.player: pages/api/audio/player.md
+      - ~.source:
+        - ~.base: pages/api/audio/source/base.md
+        - ~.buffer: pages/api/audio/source/buffer.md
+        - ~.file: pages/api/audio/source/file.md
+        - ~.url: pages/api/audio/source/url.md
+        - ~.youtube: pages/api/audio/source/youtube.md
+      - ~.store: pages/api/audio/store.md
     - hikariwave.client: pages/api/client.md
     - hikariwave.config: pages/api/config.md
     - hikariwave.connection: pages/api/connection.md
     - hikariwave.event:
-      - hikariwave.event.events:
-        - hikariwave.event.events.audio: pages/api/event/events/audio.md
-        - hikariwave.event.events.base: pages/api/event/events/base.md
-        - hikariwave.event.events.bot: pages/api/event/events/bot.md
-        - hikariwave.event.events.member: pages/api/event/events/member.md
-        - hikariwave.event.events.voice: pages/api/event/events/voice.md
-      - hikariwave.event.factory: pages/api/event/factory.md
-      - hikariwave.event.types: pages/api/event/types.md
+      - ~.events:
+        - ~.audio: pages/api/event/events/audio.md
+        - ~.base: pages/api/event/events/base.md
+        - ~.bot: pages/api/event/events/bot.md
+        - ~.member: pages/api/event/events/member.md
+        - ~.voice: pages/api/event/events/voice.md
+      - ~.factory: pages/api/event/factory.md
+      - ~.types: pages/api/event/types.md
     - hikariwave.internal:
-      - hikariwave.internal.constants: pages/api/internal/constants.md
-      - hikariwave.internal.dave: pages/api/internal/dave.md
-      - hikariwave.internal.encrypt: pages/api/internal/encrypt.md
-      - hikariwave.internal.error: pages/api/internal/error.md
-      - hikariwave.internal.result: pages/api/internal/result.md
-      - hikariwave.internal.signal: pages/api/internal/signal.md
-      - hikariwave.internal.websocket: pages/api/internal/websocket.md
+      - ~.constants: pages/api/internal/constants.md
+      - ~.dave: pages/api/internal/dave.md
+      - ~.encrypt: pages/api/internal/encrypt.md
+      - ~.error: pages/api/internal/error.md
+      - ~.result: pages/api/internal/result.md
+      - ~.signal: pages/api/internal/signal.md
+      - ~.websocket: pages/api/internal/websocket.md
     - hikariwave.networking:
-      - hikariwave.networking.gateway: pages/api/networking/gateway.md
-      - hikariwave.networking.server: pages/api/networking/server.md
+      - ~.gateway: pages/api/networking/gateway.md
+      - ~.server: pages/api/networking/server.md
     - hikariwave.utils:
-      - hikariwave.utils.youtube: pages/api/utils/youtube.md
+      - ~.youtube: pages/api/utils/youtube.md
   - Changelog:
     - Index: pages/changelog/index.md
-    - 0.6.0a1 (STAGING): pages/changelog/0.6.0a1.md
-    - 0.5.0 (01/18/26-01/18/26): pages/changelog/0.5.0.md
-    - 0.4.0 (01/10/26-01/10/26): pages/changelog/0.4.0.md
-    - 0.3.0 (12/30/25-12/31/25): pages/changelog/0.3.0.md
-    - 0.2.0 (12/21/25-12/21/25): pages/changelog/0.2.0.md
-    - 0.1.0 (12/20/25-12/21/25): pages/changelog/0.1.0.md
-    - 0.0.1 (12/16/25-12/19/25): pages/changelog/0.0.1.md
+    - 0.6.0a1: pages/changelog/0.6.0a1.md
+    - 0.5.0: pages/changelog/0.5.0.md
+    - 0.4.0: pages/changelog/0.4.0.md
+    - 0.3.0: pages/changelog/0.3.0.md
+    - 0.2.0: pages/changelog/0.2.0.md
+    - 0.1.0: pages/changelog/0.1.0.md
+    - 0.0.1: pages/changelog/0.0.1.md

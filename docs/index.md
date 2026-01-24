@@ -1,7 +1,6 @@
 <p align="center">
-    <img src="https://raw.githubusercontent.com/WilDev-Studios/hikari-wave/main/assets/banner.png" width=650/>
+    <img src="https://raw.githubusercontent.com/WilDev-Studios/hikari-wave/main/assets/banner.png" width=670/>
 </p>
-
 <p align="center">
     <img src="https://img.shields.io/pypi/pyversions/hikari-wave?style=for-the-badge"/>
     <img src="https://img.shields.io/pypi/dm/hikari-wave?style=for-the-badge"/>
@@ -9,7 +8,6 @@
 </p>
 
 <p align="center"><b>A lightweight, native voice implementation for hikari-based Discord bots</b></p>
-
 <p align="center">
     <b>Latest:</b> <code>0.5.0a1</code>
     &nbsp;|&nbsp;
@@ -59,7 +57,7 @@ bot.run()
 Connect to voice when a member joins:
 
 ```python
-@bot.listen(hikariwave.MemberJoinVoiceEvent)
+@bot.listen(hikariwave.MemberJoinEvent)
 async def on_join(event):
     await voice.connect(event.guild_id, event.channel_id)
 ```
@@ -67,7 +65,7 @@ async def on_join(event):
 Play audio:
 
 ```python
-@bot.listen(hikariwave.MemberJoinVoiceEvent)
+@bot.listen(hikariwave.MemberJoinEvent)
 async def on_join(event):
     connection = await voice.connect(event.guild_id, event.channel_id)
     source = FileAudioSource("test.mp3")
@@ -89,6 +87,10 @@ That's it.
     - [X] In-memory buffers
     - [X] YouTube
 - [X] Discord `DAVE`
+
+## Help and Contact
+
+Feel free to join the [hikari](https://discord.gg/hikari) Discord server under the `#wave` channel for assistance.
 
 ## Versioning & Stability Policy
 

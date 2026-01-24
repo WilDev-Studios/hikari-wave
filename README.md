@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="https://raw.githubusercontent.com/WilDev-Studios/hikari-wave/main/assets/banner.png" width=650/>
+    <img src="https://raw.githubusercontent.com/WilDev-Studios/hikari-wave/main/assets/banner.png" width=670/>
 </p>
 
 <p align="center">
@@ -59,7 +59,7 @@ bot.run()
 Connect to voice when a member joins:
 
 ```python
-@bot.listen(hikariwave.MemberJoinVoiceEvent)
+@bot.listen(hikariwave.MemberJoinEvent)
 async def on_join(event):
     await voice.connect(event.guild_id, event.channel_id)
 ```
@@ -67,7 +67,7 @@ async def on_join(event):
 Play audio:
 
 ```python
-@bot.listen(hikariwave.MemberJoinVoiceEvent)
+@bot.listen(hikariwave.MemberJoinEvent)
 async def on_join(event):
     connection = await voice.connect(event.guild_id, event.channel_id)
     source = FileAudioSource("test.mp3")
@@ -94,6 +94,10 @@ That's it.
 
 Full documentation is available at:
 [https://hikari-wave.wildevstudios.net/](https://hikari-wave.wildevstudios.net/)
+
+## Help and Contact
+
+Feel free to join the [hikari](https://discord.gg/hikari) Discord server under the `#wave` channel for assistance.
 
 ## Versioning & Stability Policy
 
