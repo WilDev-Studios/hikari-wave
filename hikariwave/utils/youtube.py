@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from yt_dlp.YoutubeDL import YoutubeDL as YT
 
 import asyncio
+import random
 
 if TYPE_CHECKING:
     from typing import Any
@@ -208,7 +209,7 @@ class YouTubeSearchResult:
 
 class _YouTubeInternal:
     @staticmethod
-    async def queue_from_playlist(player: AudioPlayer, url: str, limit: int, autoplay: bool) -> list[YouTubeAudioSource]:
+    async def queue_from_playlist(player: AudioPlayer, url: str, limit: int, autoplay: bool, shuffle: bool) -> list[YouTubeAudioSource]:
         if not isinstance(player, AudioPlayer):
             error: str = "Provided player must be `AudioPlayer`"
             raise TypeError(error)
@@ -228,6 +229,10 @@ class _YouTubeInternal:
         
         if not isinstance(autoplay, bool):
             error: str = "Provided autoplay must be `bool`"
+            raise TypeError(error)
+        
+        if not isinstance(shuffle, bool):
+            error: str = "Provided shuffle must be `bool`"
             raise TypeError(error)
 
         if "list=" not in url:
@@ -265,6 +270,9 @@ class _YouTubeInternal:
             source: YouTubeAudioSource = YouTubeAudioSource(url)
             sources.append(source)
         
+        if shuffle:
+            random.shuffle(sources)
+        
         await player.add_queue_bulk(sources, autoplay=autoplay)
         return sources
 
@@ -298,7 +306,14 @@ class YouTube:
     """Utility class containing UX features for `YouTube`."""
 
     @staticmethod
-    async def queue_from_playlist(player: AudioPlayer, url: str, *, limit: int = None, autoplay: bool = True) -> list[YouTubeAudioSource]:
+    async def queue_from_playlist(
+        player: AudioPlayer,
+        url: str,
+        *,
+        limit: int = None,
+        autoplay: bool = True,
+        shuffle: bool = False,
+    ) -> list[YouTubeAudioSource]:
         """
         Queue audio from a YouTube playlist into an audio player queue.
         
@@ -312,7 +327,9 @@ class YouTube:
             If provided, the maximum amount of audio to queue.
         autoplay : bool 
             If provided, controls if the player should automatically play the first queued audio if the player isn't playing anything.
-        
+        shuffle : bool
+            If provided, if the queued audio should be shuffled instead of the order of the playlist.
+            
         Returns
         -------
         list[YouTubeAudioSource]
@@ -325,12 +342,13 @@ class YouTube:
             - If `url` is not `str`.
             - If `limit` is provided and is not `int`.
             - If `autoplay` is provided and is not `bool`.
+            - If `shuffle` is provided and is not `bool`.
         ValueError
             - If `url` is not a valid YouTube playlist URL.
             - If `limit` is provided and is not at least `1`.
         """
 
-        return await _YouTubeInternal.queue_from_playlist(player, url, limit, autoplay)
+        return await _YouTubeInternal.queue_from_playlist(player, url, limit, autoplay, shuffle)
 
     @staticmethod
     async def search(query: str, limit: int = 10) -> YouTubeSearchResult | None:
