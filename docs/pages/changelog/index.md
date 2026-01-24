@@ -16,6 +16,7 @@ For full details, click a specific version.
 - New player `add_queue_bulk` method.
 - New YouTube utility method `queue_from_playlist`.
 - Various bug fixes.
+- New `hikari-wave[speedups]` optional dependency, introducing `orjson`.
 
 ## 0.5.0 (January 18th, 2026)
 

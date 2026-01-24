@@ -32,7 +32,17 @@ classifiers = [
     "Intended Audience :: Developers",
     "Typing :: Typed",
 ]
-keywords = ["async", "audio", "bot", "discord", "hikari", "music", "voice"]
+keywords = [
+    "async",
+    "audio",
+    "bot",
+    "dave",
+    "discord",
+    "hikari",
+    "music",
+    "voice",
+    "youtube",
+]
 dependencies = [
     "aiofiles>=25.1.0,<26",
     "cryptography>=46.0.3,<47",
@@ -48,6 +58,11 @@ Homepage = "https://github.com/WilDev-Studios/hikari-wave"
 Repository = "https://github.com/WilDev-Studios/hikari-wave"
 Documentation = "https://hikari-wave.wildevstudios.net/"
 Issues = "https://github.com/WilDev-Studios/hikari-wave/issues"
+
+[project.optional-dependencies]
+speedups = [
+    "orjson>=3.11.5,<4",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["hikariwave"]

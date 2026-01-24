@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import (
-    auto,
     IntEnum,
 )
 from hikariwave.internal.constants import CloseCode
@@ -14,9 +13,13 @@ from hikariwave.internal.signal import (
 from typing import TYPE_CHECKING
 
 import asyncio
-import json
 import logging
 import websockets
+
+try:
+    import orjson as json
+except ImportError:
+    import json
 
 if TYPE_CHECKING:
     from typing import Any
@@ -45,13 +48,13 @@ class WebsocketPacketJSON(WebsocketPacket):
 class WebsocketState(IntEnum):
     """Websocket connection state."""
 
-    CONNECTED     = auto()
+    CONNECTED     = 0
     """Websocket is currently connected."""
-    CONNECTING    = auto()
+    CONNECTING    = 1
     """Websocket is currently connecting."""
-    DISCONNECTED  = auto()
+    DISCONNECTED  = 2
     """Websocket is currently disconnected."""
-    DISCONNECTING = auto()
+    DISCONNECTING = 3
     """Websocket is currently disconnecting."""
 
 class Websocket:
@@ -226,7 +229,7 @@ class Websocket:
         if isinstance(payload, str):
             try:
                 return WebsocketPacketJSON(json.loads(payload))
-            except json.JSONDecodeError:
+            except Exception:
                 return WebsocketPacketJSON({})
         
         if isinstance(payload, bytes):
@@ -275,4 +278,9 @@ class Websocket:
             Error occurred and an attempt to resume the session should be made.
         """
 
-        await self.__send(json.dumps(data))
+        payload: dict[str, Any] | bytes = json.dumps(data)
+
+        if json.__name__ == "orjson":
+            payload = payload.decode("utf-8")
+
+        await self.__send(payload)

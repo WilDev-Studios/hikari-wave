@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterable
 from dataclasses import dataclass
-from enum import auto, IntEnum
+from enum import IntEnum
 from hikariwave.audio.source import AudioSource
 from hikariwave.audio.store import FrameStore
 from hikariwave.event.events.audio import (
@@ -44,15 +44,15 @@ class QueuedAudio:
 class AudioPlaybackState(IntEnum):
     """The current state of the player's playback."""
 
-    BUFFERING = auto()
+    BUFFERING = 0
     """The player is loading the current audio."""
-    IDLE = auto()
+    IDLE      = 1
     """The player is not currently playing any audio."""
-    PAUSED = auto()
+    PAUSED    = 2
     """The player is currently paused."""
-    PLAYING = auto()
+    PLAYING   = 3
     """The player is currently playing audio."""
-    STOPPING = auto()
+    STOPPING  = 4
     """The player is stopping."""
 
 _VALID_TRANSITIONS: dict[AudioPlaybackState, set[AudioPlaybackState]] = {

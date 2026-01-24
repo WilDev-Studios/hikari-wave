@@ -1,4 +1,4 @@
-from enum import auto, IntEnum
+from enum import IntEnum
 
 __all__ = (
     "BufferConfig",
@@ -144,9 +144,9 @@ def validate_volume(volume: object) -> float | int | str:
 class BufferMode(IntEnum):
     """Frame storage buffer modes."""
 
-    MEMORY = auto()
+    MEMORY = 0
     """All buffered frames will be stored in memory (RAM) - Only recommended for high-RAM servers/devices."""
-    DISK = auto()
+    DISK   = 1
     """All buffered frames will be stored on the disk (storage) with configurable values and amounts - Recommended for most setups."""
 
 class BufferConfig:

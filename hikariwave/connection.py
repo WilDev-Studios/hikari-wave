@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import auto, IntEnum
+from enum import IntEnum
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.config import Config
 from hikariwave.internal.constants import Constants, Opcode
@@ -20,15 +20,15 @@ __all__ = ("VoiceConnection",)
 class ConnectionStatus(IntEnum):
     """Represents the current state of a voice connection."""
 
-    CONNECTED = auto()
+    CONNECTED    = 0
     """Connected to voice gateway and voice server."""
-    CONNECTING = auto()
+    CONNECTING   = 1
     """Connecting to voice gateway and voice server."""
-    DISCONNECTED = auto()
+    DISCONNECTED = 2
     """Disconnected from voice gateway and voice server."""
-    NEW = auto()
+    NEW          = 3
     """Instantiated and waiting to begin connection."""
-    RECONNECTING = auto()
+    RECONNECTING = 4
     """Reconnecting to voice gateway and voice server."""
 
 class VoiceConnection:

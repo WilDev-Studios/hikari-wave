@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import auto, IntEnum
+from enum import IntEnum
 from hikariwave.event.events.voice import VoiceReconnectEvent
 from hikariwave.internal.constants import (
     Constants,
@@ -61,15 +61,15 @@ class GatewaySessionDescriptionPayload(GatewayPayload):
 class GatewayState(IntEnum):
     """Current state of a voice gateway."""
 
-    CONNECTED     = auto()
+    CONNECTED     = 0
     """Voice gateway is connected."""
-    CONNECTING    = auto()
+    CONNECTING    = 1
     """Voice gateway is connecting."""
-    DISCONNECTED  = auto()
+    DISCONNECTED  = 2
     """Voice gateway is not connected."""
-    DISCONNECTING = auto()
+    DISCONNECTING = 3
     """Voice gateway is disconnecting."""
-    RESUMING      = auto()
+    RESUMING      = 4
     """Voice gateway is resuming."""
 
 class VoiceGateway:

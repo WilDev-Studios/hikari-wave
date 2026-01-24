@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import auto, IntEnum
+from enum import IntEnum
 
 __all__ = (
     "AudioBeginOrigin",
@@ -10,17 +10,17 @@ __all__ = (
 class AudioBeginOrigin(IntEnum):
     """The origin of an `AudioBeginEvent`."""
 
-    HISTORY = auto()
+    HISTORY = 0
     """Audio playing from player history."""
-    PLAY = auto()
+    PLAY    = 1
     """Audio playing from a direct call, i.e. `play()`."""
-    QUEUE = auto()
+    QUEUE   = 2
     """Audio playing from player queue."""
 
 class VoiceWarningType(IntEnum):
     """A type of voice warning."""
 
-    JITTER           = auto()
+    JITTER      = 0
     """Maximum jitter has been exceeded."""
-    PACKET_LOSS      = auto()
+    PACKET_LOSS = 1
     """Maximum packet loss has been exceeded."""

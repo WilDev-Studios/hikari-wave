@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import auto, IntEnum
+from enum import IntEnum
 
 __all__ = (
     "Result",
@@ -11,17 +11,17 @@ __all__ = (
 class ResultReason(IntEnum):
     """Reasons for a failed result state."""
 
-    EMPTY_HISTORY = auto()
+    EMPTY_HISTORY = 0
     """The audio history was empty."""
-    EMPTY_QUEUE = auto()
+    EMPTY_QUEUE   = 1
     """The audio queue was empty."""
-    NO_TRACK = auto()
+    NO_TRACK      = 2
     """No audio is currently playing."""
-    NOT_FOUND = auto()
+    NOT_FOUND     = 3
     """The requested object could not be found."""
-    PAUSED = auto()
+    PAUSED        = 4
     """The player is not currently playing."""
-    PLAYING = auto()
+    PLAYING       = 5
     """The player is currently playing."""
 
 @dataclass(frozen=True, slots=True)
