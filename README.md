@@ -128,16 +128,6 @@ Pre-releases exist to gather feedback and catch issues early. Once stabilized, t
 - Intended for developers who want early access to new features
 - Not recommended for production unless you are testing upcoming functionality.
 
-### Backward Compatibility
-
-- Until `1.0.0`, backward compatibility is **best-effort**
-- Breaking changes may occur in minor versions, but will:
-    - Be clearly documented
-    - Never be silent
-    - Typically go through pre-releases first
-
-Once `1.0.0` is reached, stricter compatibility guarantees will apply.
-
 ### Recommendation
 
 If you want maximum stability:
@@ -177,11 +167,6 @@ When a feature is deprecated:
 
 - Deprecated features may emit a `DeprecationWarning`
 - Warnings are non-fatal and do not break existing code
-
-3. **Grace Period**
-
-- Deprecated features will remain available for at least **one full minor release**
-- Removal will not occur in the same release they are deprecated
 
 ### Removal Timeline
 
