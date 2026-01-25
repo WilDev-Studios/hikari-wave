@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Callable, Coroutine, Iterable
 from dataclasses import dataclass
 from enum import IntEnum
 from hikariwave.audio.source import AudioSource
@@ -14,7 +14,7 @@ from hikariwave.event.events.audio import (
 from hikariwave.event.types import AudioBeginOrigin
 from hikariwave.internal.constants import Audio
 from hikariwave.internal.result import Result, ResultReason
-from typing import Any, Callable, Coroutine, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import asyncio
 import logging
@@ -79,13 +79,13 @@ class AudioPlayer:
     def __init__(self, connection: VoiceConnection) -> None:
         """
         Create a new audio player.
-        
+
         Parameters
         ----------
         connection : VoiceConnection
             The active voice connection.
         """
-        
+
         self._connection: VoiceConnection = connection
         self._store: FrameStore = FrameStore(self._connection)
         self._encoders: set[asyncio.Task[None]] = set()
@@ -116,10 +116,10 @@ class AudioPlayer:
     def _add_to_history(self, source: AudioSource) -> None:
         if not source:
             return
-        
+
         if self._history and self._history[-1] == source:
             return
-        
+
         self._history.append(source)
 
     def _generate_rtp(self) -> bytes:
@@ -138,14 +138,14 @@ class AudioPlayer:
         try:
             self._stop_event.clear()
             self._skip_event.clear()
-            setattr(source, "_volume", getattr(source, "_volume", None) or self._volume)
+            source._volume = source._volume or self._volume
 
             await self._connection._client._ffmpeg.submit(source, self._connection)
             await self._store.wait(frames=5)
-            
+
             self._set_state(AudioPlaybackState.PLAYING)
             await self._connection._gateway.set_speaking(True, self._priority)
-            
+
             self._connection._client._event_factory.emit(
                 AudioBeginEvent,
                 audio=source,
@@ -191,7 +191,7 @@ class AudioPlayer:
                 self._sequence = (self._sequence + 1) % Audio.BIT_16U
                 self._timestamp = (self._timestamp + Audio.SAMPLES_PER_FRAME) % Audio.BIT_32U
                 self._frames += 1
-                
+
                 now: float = time.perf_counter()
                 target: float = start_time + (self._frames * frame_duration)
                 drift: float = target - now
@@ -225,7 +225,7 @@ class AudioPlayer:
         finally:
             if self._state == AudioPlaybackState.BUFFERING:
                 self._set_state(AudioPlaybackState.IDLE)
-        
+
         return completed
 
     async def _player_loop(self) -> None:
@@ -247,9 +247,9 @@ class AudioPlayer:
                         self._set_state(AudioPlaybackState.IDLE)
 
                         return
-                
+
                     self._current = source
-                
+
                 await self._store.clear()
                 completed: bool = await self._play_internal(source, origin)
                 await self._connection._gateway.set_speaking(False)
@@ -284,13 +284,13 @@ class AudioPlayer:
         if state not in _VALID_TRANSITIONS[self._state]:
             error: str = f"Invalid state transition: {self._state.name} -> {state.name}"
             raise RuntimeError(error)
-        
+
         self._state = state
 
     async def add_queue(self, source: AudioSource, *, autoplay: bool = True) -> Result:
         """
         Add an audio source to the queue.
-        
+
         Parameters
         ----------
         source : AudioSource
@@ -313,7 +313,7 @@ class AudioPlayer:
         if not isinstance(source, AudioSource):
             error: str = "Provided audio source doesn't inherit from `AudioSource`"
             raise TypeError(error)
-        
+
         if not isinstance(autoplay, bool):
             error: str = "Provided autoplay must be `bool`"
             raise TypeError(error)
@@ -323,25 +323,25 @@ class AudioPlayer:
 
             if autoplay and (not self._player_task or self._player_task.done()):
                 self._player_task = asyncio.create_task(self._player_loop())
-        
+
         return Result.succeeded()
 
     async def add_queue_bulk(self, sources: Iterable[AudioSource], *, autoplay: bool = True) -> Result:
         """
         Add a list of audio sources to the queue.
-        
+
         Parameters
         ----------
         sources : Iterable[AudioSource]
             The sources of audio to add.
         autoplay : bool
             If the player should play the first source if there's no audio currently loaded.
-        
+
         Returns
         -------
         Result
             If the operation was successful, with reason provided if otherwise.
-        
+
         Raises
         ------
         TypeError
@@ -358,17 +358,17 @@ class AudioPlayer:
         if not isinstance(autoplay, bool):
             error: str = "Provided autoplay must be `bool`"
             raise TypeError(error)
-        
+
         if not sources:
             error: str = "Provided sources must be at least `1` in length"
             raise ValueError(error)
-    
+
         valid_sources: list[QueuedAudio] = []
         for source in sources:
             if not isinstance(source, AudioSource):
                 error: str = "Provided sources must contain `AudioSource`"
                 raise TypeError(error)
-            
+
             valid_sources.append(QueuedAudio(source, AudioBeginOrigin.QUEUE))
 
         async with self._lock:
@@ -376,13 +376,13 @@ class AudioPlayer:
 
             if autoplay and (not self._player_task or self._player_task.done()):
                 self._player_task = asyncio.create_task(self._player_loop())
-        
+
         return Result.succeeded()
 
     async def clear_history(self) -> Result:
         """
         Clear all audio from history.
-        
+
         Returns
         -------
         Result
@@ -392,9 +392,9 @@ class AudioPlayer:
         async with self._lock:
             if len(self._history) < 1:
                 return Result.failed(ResultReason.EMPTY_HISTORY)
-            
+
             self._history.clear()
-        
+
         return Result.succeeded()
 
     async def clear_queue(self) -> Result:
@@ -410,9 +410,9 @@ class AudioPlayer:
         async with self._lock:
             if len(self._queue) < 1:
                 return Result.failed(ResultReason.EMPTY_QUEUE)
-            
+
             self._queue.clear()
-        
+
         return Result.succeeded()
 
     @property
@@ -454,7 +454,7 @@ class AudioPlayer:
         async with self._lock:
             if not self._current:
                 return Result.failed(ResultReason.NO_TRACK)
-    
+
             if not self._queue:
                 return Result.failed(ResultReason.EMPTY_QUEUE)
 
@@ -462,7 +462,7 @@ class AudioPlayer:
 
             self._skip_event.set()
             self._resume_event.set()
-        
+
         return Result.succeeded()
 
     async def pause(self) -> Result:
@@ -486,18 +486,18 @@ class AudioPlayer:
 
         await self._send_silence()
         await self._connection._gateway.set_speaking(False, self._priority)
-        
+
         return Result.succeeded()
 
     async def play(self, source: AudioSource) -> Result:
         """
         Play audio from a source.
-        
+
         Parameters
         ----------
         source : AudioSource
             The source of the audio to play
-        
+
         Returns
         -------
         Result
@@ -521,7 +521,7 @@ class AudioPlayer:
 
             if not self._player_task or self._player_task.done():
                 self._player_task = asyncio.create_task(self._player_loop())
-        
+
         return Result.succeeded()
 
     async def previous(self) -> Result:
@@ -537,7 +537,7 @@ class AudioPlayer:
         async with self._lock:
             if not self._history:
                 return Result.failed(ResultReason.EMPTY_HISTORY)
-            
+
             if self._current:
                 self._queue.appendleft(QueuedAudio(self._current, AudioBeginOrigin.QUEUE))
 
@@ -547,10 +547,10 @@ class AudioPlayer:
             if self._current:
                 self._skip_event.set()
                 self._resume_event.set()
-            
+
             if not self._player_task or self._player_task.done():
                 self._player_task = asyncio.create_task(self._player_loop())
-            
+
         return Result.succeeded()
 
     @property
@@ -559,11 +559,11 @@ class AudioPlayer:
 
         if self._current is None:
             return 0.0
-        
+
         duration: float = getattr(self._current, "duration", None)
         if not duration:
             return 0.0
-        
+
         return min(1.0, self.elapsed / duration)
 
     @property
@@ -575,30 +575,30 @@ class AudioPlayer:
     @property
     def remaining(self) -> float:
         """The amount of seconds remaining for the current audio."""
-        
+
         if self._current is None:
             return 0.0
-        
+
         duration: float = getattr(self._current, "duration", None)
         if duration is None:
             return 0.0
-        
+
         return max(0.0, duration - self.elapsed)
 
     async def remove_queue(self, source: AudioSource) -> Result:
         """
         Remove an audio source from the queue.
-        
+
         Parameters
         ----------
         source : AudioSource
             The source of the audio to remove.
-        
+
         Returns
         -------
         Result
             If the operation was successful, with reason provided if otherwise.
-        
+
         Raises
         ------
         TypeError
@@ -622,7 +622,7 @@ class AudioPlayer:
 
             if not found:
                 return Result.failed(ResultReason.NOT_FOUND)
-        
+
         return Result.succeeded()
 
     async def resume(self) -> Result:
@@ -634,12 +634,12 @@ class AudioPlayer:
         Result
             If the operation was successful, with reason provided if otherwise.
         """
-        
+
         if self._resume_event.is_set():
             return Result.failed(ResultReason.PLAYING)
 
         await self._connection._gateway.set_speaking(True, self._priority)
-        
+
         self._resume_event.set()
         self._set_state(AudioPlaybackState.PLAYING)
         return Result.succeeded()
@@ -647,12 +647,12 @@ class AudioPlayer:
     def set_priority(self, priority: bool) -> None:
         """
         Set if this player should play with priority voice enabled.
-        
+
         Parameters
         ----------
-        priority : bool 
+        priority : bool
             If the player should playback this audio with a prioritized speaking status.
-        
+
         Raises
         ------
         TypeError
@@ -662,19 +662,19 @@ class AudioPlayer:
         if not isinstance(priority, bool):
             error: str = "Provided priority must be `bool`"
             raise TypeError(error)
-        
+
         self._priority = priority
 
     def set_volume(self, volume: float | str | None = None) -> None:
         """
         Set the default volume of this player.
         Can be `None`, any scaled value (`1.0`, `2.0`, `0.5`, etc.) or dB-based (`-3dB`, `0.5dB`, etc.).
-        
+
         Parameters
         ----------
         volume : float | str | None
             The volume to set as a default for this player - `None` uses connection/client configuration.
-        
+
         Raises
         ------
         TypeError
@@ -684,7 +684,7 @@ class AudioPlayer:
         if volume is not None and not isinstance(volume, (float, int, str)):
             error: str = "Provided volume must be a `float`, `int`, or `str`"
             raise TypeError(error)
-        
+
         self._volume = volume if volume is not None else self._connection._config._volume
 
     async def shuffle(self) -> Result:
@@ -700,12 +700,12 @@ class AudioPlayer:
         async with self._lock:
             if len(self._queue) < 1:
                 return Result.failed(ResultReason.EMPTY_QUEUE)
-            
+
             temp: list[QueuedAudio] = list(self._queue)
             random.shuffle(temp)
             self._queue.clear()
             self._queue.extend(temp)
-        
+
         return Result.succeeded()
 
     @property
@@ -722,7 +722,7 @@ class AudioPlayer:
         Result
             If the operation was successful, with reason provided if otherwise.
         """
-        
+
         self._stop_event.set()
         self._skip_event.set()
         self._resume_event.set()
@@ -731,10 +731,10 @@ class AudioPlayer:
             self._queue.clear()
             self._priority_source = None
             self._current = None
-        
+
         for task in list(self._encoders):
             task.cancel()
-        
+
         await asyncio.gather(*self._encoders, return_exceptions=True)
         self._encoders.clear()
 
@@ -742,7 +742,7 @@ class AudioPlayer:
         await self._store.clear()
 
         return Result.succeeded()
-    
+
     @property
     def volume(self) -> float | str | None:
         """If set, the player's default volume."""

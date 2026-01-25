@@ -18,14 +18,14 @@ class Encrypt:
     def decrypt_aead_aes256_gcm_rtpsize(secret_key: bytes, audio: bytes) -> bytes:
         """
         Decrypt audio using `aead_aes256_gcm_rtpsize`.
-        
+
         Parameters
         ----------
         secret_key : bytes
             32-byte AES encryption key provided by Discord.
         audio : bytes
             Opus audio payload.
-        
+
         Returns
         -------
         bytes
@@ -33,33 +33,33 @@ class Encrypt:
         """
 
         header_size = 12
-        
+
         if (audio[0] & 0x10) != 0:
             header_size = 16
-        
+
         decrypted: bytes = AESGCM(secret_key).decrypt(
             audio[-4:] + (b"\x00" * 8),
             audio[header_size:-4],
             audio[:header_size],
         )
-        
+
         if (audio[0] & 0x10) != 0:
             return decrypted[struct.unpack(">H", audio[14:16])[0] * 4:]
-        
+
         return decrypted
 
     @staticmethod
     def decrypt_aead_xchacha20_poly1305_rtpsize(secret_key: bytes, audio: bytes) -> bytes:
         """
         Decrypt audio using `aead_xchacha20_poly1305_rtpsize`.
-        
+
         Parameters
         ----------
         secret_key : bytes
             32-byte AES encryption key provided by Discord.
         audio : bytes
             Opus audio payload.
-        
+
         Returns
         -------
         bytes
@@ -67,10 +67,10 @@ class Encrypt:
         """
 
         header_size = 12
-        
+
         if (audio[0] & 0x10) != 0:
             header_size = 16
-        
+
         nonce: bytearray = bytearray(24)
         nonce[:4] = audio[-4:]
 
@@ -79,17 +79,17 @@ class Encrypt:
             audio[:header_size],
             bytes(nonce),
         )
-        
+
         if (audio[0] & 0x10) != 0:
             return decrypted[struct.unpack(">H", audio[14:16])[0] * 4:]
-        
+
         return decrypted
 
     @staticmethod
     def encrypt_aead_aes256_gcm_rtpsize(secret_key: bytes, nonce: int, header: bytes, audio: bytes) -> bytes:
         """
         Encrypt audio using `aead_aes256_gcm_rtpsize`.
-        
+
         Parameters
         ----------
         secret_key : bytes
@@ -100,7 +100,7 @@ class Encrypt:
             RTP header (12 bytes).
         audio : bytes
             Opus audio payload.
-        
+
         Returns
         -------
         bytes
@@ -116,7 +116,7 @@ class Encrypt:
     def encrypt_aead_xchacha20_poly1305_rtpsize(secret_key: bytes, nonce: int, header: bytes, audio: bytes) -> bytes:
         """
         Encrypt audio using `aead_xchacha20_poly1305_rtpsize`.
-        
+
         Parameters
         ----------
         secret_key : bytes
@@ -127,7 +127,7 @@ class Encrypt:
             RTP header (12 bytes).
         audio : bytes
             Opus audio payload.
-        
+
         Returns
         -------
         bytes

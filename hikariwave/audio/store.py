@@ -28,7 +28,7 @@ class FrameStore:
     def __init__(self, connection: VoiceConnection) -> None:
         """
         Create a new frame storage object.
-        
+
         Parameters
         ----------
         connection : VoiceConnection
@@ -73,7 +73,7 @@ class FrameStore:
         if self._connection._config.buffer.mode == BufferMode.DISK:
             os.makedirs(f"wavecache/{self._connection._guild_id}", exist_ok=True)
             self._write_task = asyncio.create_task(self._disk_writer())
-    
+
     async def _disk_writer(self) -> None:
         try:
             while not self._shutdown:
@@ -88,7 +88,7 @@ class FrameStore:
                 try:
                     async with aiofiles.open(path, "wb") as file:
                         await file.write(data)
-                    
+
                     self._disk_queue.append(file_index)
                     self._event.set()
                 except Exception:
@@ -103,7 +103,7 @@ class FrameStore:
             async with self._read_lock:
                 if self._refilling or not self._disk_queue:
                     return
-            
+
                 self._refilling = True
                 file_index: int = self._disk_queue.popleft()
 
@@ -112,15 +112,15 @@ class FrameStore:
 
                     async with aiofiles.open(path, "rb") as file:
                         content: bytes = await file.read()
-                    
+
                     try:
                         os.remove(path)
                     except OSError:
                         pass
-                
+
                     offset: int = 0
                     batch: list[bytes] = []
-                        
+
                     while offset < len(content):
                         if offset + 2 > len(content):
                             break
@@ -137,13 +137,13 @@ class FrameStore:
                         if len(batch) >= 100:
                             for frame in batch:
                                 self._live_buffer.put_nowait(frame)
-                            
+
                             batch.clear()
                             await asyncio.sleep(0)
-                    
+
                     for frame in batch:
                         self._live_buffer.put_nowait(frame)
-                    
+
                     if not self._disk_queue and self._eos_written:
                         self._live_buffer.put_nowait(None)
                 finally:
@@ -156,7 +156,7 @@ class FrameStore:
         """
         Clear all internal buffers and stop any operations.
         """
-        
+
         self._generation += 1
         self._shutdown = True
 
@@ -165,7 +165,7 @@ class FrameStore:
 
             try:
                 await asyncio.wait_for(self._write_task, 2.0)
-            except asyncio.CancelledError | asyncio.TimeoutError:
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 self._write_task.cancel()
 
                 try:
@@ -185,7 +185,7 @@ class FrameStore:
                     pass
 
                 self._read_task = None
-        
+
         self._event.clear()
         self._eos_written = False
         self._eos_emitted = False
@@ -209,7 +209,7 @@ class FrameStore:
                         os.remove(path)
                 except OSError:
                     pass
-            
+
             try:
                 cache_dir: str = f"wavecache/{self._connection._guild_id}"
                 if os.path.exists(cache_dir):
@@ -223,7 +223,7 @@ class FrameStore:
                             pass
             except OSError:
                 pass
-                
+
         self._shutdown = False
 
         if self._connection._config.buffer.mode == BufferMode.DISK:
@@ -233,43 +233,43 @@ class FrameStore:
         """
         Fetch the next available frame.
         """
-        
+
         while True:
             if not self._live_buffer.empty():
                 frame: bytes | None = self._live_buffer.get_nowait()
-            
+
                 if self._connection._config.buffer.mode == BufferMode.DISK and self._live_buffer.qsize() <= self._low_mark and self._disk_queue:
                     if self._read_task is None or self._read_task.done():
                         self._read_task = asyncio.create_task(self._read_chunk())
-                
+
                 return frame
-            
+
             if self._eos_written and not self._disk_queue and not self._refilling:
                 if not self._eos_emitted:
                     self._eos_emitted = True
-                
+
                 return None
-            
+
             self._event.clear()
             await self._event.wait()
 
     async def store_frame(self, frame: bytes | None, generation: int) -> bool:
         """
         Store a frame.
-        
+
         Parameters
         ----------
         frame : bytes | None
             The frame to store.
         generation : int
             The current source's generation ID, to prevent stale audio from extended FFmpeg processes.
-        
+
         Returns
         -------
         bool
             If the frame was stored.
         """
-        
+
         if generation != self._generation:
             return False
 
@@ -277,7 +277,7 @@ class FrameStore:
             self._live_buffer.put_nowait(frame)
             self._event.set()
             return True
-        
+
         if frame is None:
             self._eos_written = True
 
@@ -290,17 +290,17 @@ class FrameStore:
 
             if not self._disk_queue and self._write_queue.empty():
                 self._live_buffer.put_nowait(None)
-    
+
             self._event.set()
             return True
-        
+
         has_backlog: bool = bool(self._disk_queue) or bool(self._active_chunk)
-        
+
         if not has_backlog and self._live_buffer.qsize() < self._high_mark:
             self._live_buffer.put_nowait(frame)
             self._event.set()
             return True
-        
+
         frame_data: bytes = len(frame).to_bytes(2, "big") + frame
         self._active_chunk.extend(frame_data)
         self._chunk_frame_count += 1
@@ -315,9 +315,9 @@ class FrameStore:
             self._chunk_frame_count = 0
 
             self._event.set()
-        
+
         return True
-    
+
     async def wait(self, *, frames: int = 0) -> None:
         """
         Wait until the store is available to read from.
@@ -327,12 +327,12 @@ class FrameStore:
         frames : int
             If provided, the minimum amount of frames in store before continuing.
         """
-        
+
         while True:
             available: int = self._live_buffer.qsize() + len(self._disk_queue)
 
             if available >= frames or (self._eos_written and not self._disk_queue):
                 return
-            
+
             self._event.clear()
             await self._event.wait()

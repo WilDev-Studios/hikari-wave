@@ -82,19 +82,14 @@ path = "hikariwave/__init__.py"
 
 [tool.ruff]
 target-version = "py310"
-line-length = 127
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "tab"
 
 [tool.ruff.lint]
-select = [
-    'F',      # pyflakes
-    'E', 'W', # pycodestyle
-    'B',      # bugbear
-    "UP",     # pyupgrade
-]
+select = ['F', 'E', 'W', 'B', "UP"]
+ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "hikariwave/__init__.py" = ["F401"]

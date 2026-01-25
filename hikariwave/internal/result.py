@@ -28,7 +28,7 @@ class ResultReason(IntEnum):
 class Result:
     """
     The output of a method for UX.
-    
+
     Can be silently ignored or used for further functionality.
     """
 
@@ -44,5 +44,5 @@ class Result:
 
     @staticmethod
     def succeeded() -> Result:
-        """Create an `SUCCEEDED` result."""
+        """Create a `SUCCEEDED` result."""
         return Result(True, None)

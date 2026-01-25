@@ -31,20 +31,20 @@ class FFmpegProcess:
         """
         Create a new FFmpeg process handler.
         """
-        
+
         self._process: asyncio.subprocess.Process = None
-    
+
     async def start(self, args: list[str], *, stdin: bool) -> asyncio.subprocess.Process:
         """
         Start the internal process.
-        
+
         Parameters
         ----------
         args : list[str]
             The arguments to pass to the FFmpeg process.
         stdin : bool
             If `STDIN` should be pipeable.
-        
+
         Returns
         -------
         asyncio.subprocess.Process
@@ -58,7 +58,7 @@ class FFmpegProcess:
             stderr=asyncio.subprocess.PIPE,
         )
         return self._process
-    
+
     async def terminate(self) -> None:
         """
         Kill the internal process.
@@ -66,14 +66,14 @@ class FFmpegProcess:
 
         if not self._process:
             return
-        
+
         for stream in (self._process.stdin, self._process.stdout, self._process.stderr):
             if not stream or not hasattr(stream, "_transport"):
                 continue
 
             with contextlib.suppress(Exception):
                 stream._transport.close()
-        
+
         if self._process.returncode is None:
             self._process.terminate()
 
@@ -82,7 +82,7 @@ class FFmpegProcess:
             except asyncio.TimeoutError:
                 self._process.kill()
                 await self._process.wait()
-        
+
         self._process = None
 
 class FFmpegWorker:
@@ -112,7 +112,7 @@ class FFmpegWorker:
                 if source._headers:
                     headers = "".join(f"{k}: {v}\r\n" for k, v in source._headers.items())
             elif isinstance(source, AudioSource):
-                content: str = getattr(source, "_content")
+                content: str = source._content
 
             bitrate: str = source._bitrate or connection._config.bitrate
             channels: int = source._channels or connection._config.channels
@@ -145,34 +145,34 @@ class FFmpegWorker:
 
             if pipeable:
                 stdin_task = asyncio.create_task(self._write_stdin(process.stdin, content))
-            
+
             stderr_task: asyncio.Task[None] = asyncio.create_task(self._drain_stderr(process.stderr))
 
             try:
                 await self._read_frames(process.stdout, connection, generation)
             except _StaleEncode:
-                logger.debug(f"FFmpeg encode became stale; terminating process...")
+                logger.debug("FFmpeg encode became stale; terminating process...")
                 await self._process.terminate()
                 return
 
             if stdin_task:
                 with contextlib.suppress(asyncio.CancelledError):
                     await stdin_task
-            
+
             stderr_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await stderr_task
-            
+
             if generation == connection._player._store._generation:
                 await connection._player._store.store_frame(None, generation)
-            
+
             await self._process.terminate()
         except asyncio.CancelledError:
             logger.debug("FFmpeg encode cancelled; terminating process")
 
             if stdin_task:
                 stdin_task.cancel()
-            
+
             stderr_task.cancel()
 
             await self._process.terminate()
@@ -196,7 +196,7 @@ class FFmpegWorker:
         while True:
             if generation != connection._player._store._generation:
                 raise _StaleEncode()
-            
+
             try:
                 header: bytes = await stdout.readexactly(27)
                 if not header.startswith(b"OggS"):
@@ -220,11 +220,11 @@ class FFmpegWorker:
                     if len(frames) >= BATCH_SIZE:
                         await self._flush_frames(frames, connection, generation)
                         frames.clear()
-                    
+
                     packet.clear()
             except asyncio.IncompleteReadError:
                 break
-        
+
         if frames:
             await self._flush_frames(frames, connection, generation)
 
@@ -235,7 +235,7 @@ class FFmpegWorker:
 
             if i % (CHUNK_SIZE * 10) == 0:
                 await stdin.drain()
-        
+
         await stdin.drain()
         stdin.close()
         await stdin.wait_closed()
@@ -243,7 +243,7 @@ class FFmpegWorker:
     async def encode(self, source: AudioSource, connection: VoiceConnection) -> None:
         """
         Encode an entire audio source and stream each Opus frame into the output.
-        
+
         Parameters
         ----------
         source : AudioSource
@@ -259,7 +259,7 @@ class FFmpegWorker:
             try:
                 if attempt == MAX_RETRIES and isinstance(source, YouTubeAudioSource):
                     await source.resolve_media(True)
-                    
+
                 return await self._encode(source, connection)
             except RuntimeError as e:
                 last_error = e
@@ -271,8 +271,8 @@ class FFmpegWorker:
                     continue
 
                 break
-        
-        logger.error(f"FFmpeg failed after retries; media URL likely expired")
+
+        logger.error("FFmpeg failed after retries; media URL likely expired")
 
         error: str = "Media URL expired or unavailable. Please regenerate the audio source"
         raise RuntimeError(error) from last_error
@@ -281,14 +281,14 @@ class FFmpegWorker:
         """
         Stop the internal process.
         """
-        
+
         await self._process.terminate()
 
 class FFmpegPool:
     """Manages all FFmpeg workers and deploys them when needed."""
 
     __slots__ = (
-        "_enabled", 
+        "_enabled",
         "_max", "_total", "_min",
         "_available", "_unavailable",
     )
@@ -296,7 +296,7 @@ class FFmpegPool:
     def __init__(self, max_per_core: int, max_global: int) -> None:
         """
         Create a FFmpeg process pool.
-        
+
         Parameters
         ----------
         max_per_core : int
@@ -304,7 +304,7 @@ class FFmpegPool:
         max_global : int
             The maximum, hard-cap amount of processes that can be spawned.
         """
-        
+
         self._enabled: bool = True
 
         self._max: int = min(max_global, os.cpu_count() * max_per_core)
@@ -313,11 +313,11 @@ class FFmpegPool:
 
         self._available: asyncio.Queue[FFmpegWorker] = asyncio.Queue()
         self._unavailable: set[FFmpegWorker] = set()
-    
+
     async def submit(self, source: AudioSource, connection: VoiceConnection) -> None:
         """
         Submit and schedule an audio source to be encoded into Opus and stream output into a buffer.
-        
+
         Parameters
         ----------
         source : AudioSource
@@ -325,8 +325,9 @@ class FFmpegPool:
         connection : VoiceConnection
             The active connection requesting this encoding.
         """
-        
-        if not self._enabled: return
+
+        if not self._enabled:
+            return
 
         if self._available.empty() and self._total < self._max:
             worker: FFmpegWorker = FFmpegWorker()

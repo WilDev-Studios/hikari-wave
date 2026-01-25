@@ -45,11 +45,7 @@ __all__ = (
     "VoiceReconnectEvent",
     "VoiceWarningEvent",
     "VoiceWarningType",
-    "YouTube",
     "YouTubeAudioSource",
-    "YouTubePartialVideo",
-    "YouTubeSearchResult",
-    "YouTubeThumbnail",
     "WaveEvent",
 )
 
@@ -99,10 +95,4 @@ from hikariwave.internal import (
     Result,
     ResultReason,
     ServerError,
-)
-from hikariwave.utils import (
-    YouTube,
-    YouTubePartialVideo,
-    YouTubeSearchResult,
-    YouTubeThumbnail,
 )

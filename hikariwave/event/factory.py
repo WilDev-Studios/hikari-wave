@@ -25,19 +25,19 @@ class EventFactory:
     def __init__(self, bot: hikari.GatewayBot) -> None:
         """
         Create a new event factory.
-        
+
         Parameters
         ----------
         bot : hikari.GatewayBot
             The OAuth2 bot to use for dispatching events.
         """
-        
+
         self._bot: hikari.GatewayBot = bot
-    
+
     def emit(self, event: type[WaveEventType], **kwargs: Any) -> None:
         """
         Dispatch an event.
-        
+
         Parameters
         ----------
         event : type[WaveEvent]
@@ -49,5 +49,5 @@ class EventFactory:
         instance: WaveEventType = object.__new__(event)
         for key, value in kwargs.items():
             object.__setattr__(instance, key, value)
-        
+
         self._bot.dispatch(instance)

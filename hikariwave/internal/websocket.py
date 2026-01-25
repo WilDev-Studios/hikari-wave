@@ -69,17 +69,17 @@ class Websocket:
         """
         Create a new websocket.
         """
-        
+
         self._websocket: websockets.ClientConnection = None
         self._state: WebsocketState = WebsocketState.DISCONNECTED
-    
+
     def __close(self, exception: websockets.ConnectionClosed) -> None:
         if self._state in (WebsocketState.DISCONNECTING, WebsocketState.DISCONNECTED):
             raise DisconnectSignal()
-        
+
         if exception.rcvd is None:
             raise ReconnectSignal()
-        
+
         code: int = exception.rcvd.code
 
         match code:
@@ -108,52 +108,52 @@ class Websocket:
             case CloseCode.VOICE_SERVER_CRASHED:
                 raise ResumeSignal()
             case _:
-                logger.error("Received unhandled close code {code}; disconnecting...")
+                logger.error(f"Received unhandled close code {code}; disconnecting...")
                 raise DisconnectSignal()
 
     async def __send(self, data: bytes | str) -> None:
         if self._state in (WebsocketState.DISCONNECTED, WebsocketState.DISCONNECTING):
             return DisconnectSignal()
-        
+
         if self._state is not WebsocketState.CONNECTED:
             return ReconnectSignal()
-        
+
         try:
             await self._websocket.send(data)
-        except OSError:
-            raise ResumeSignal()
+        except OSError as e:
+            raise ResumeSignal() from e
         except websockets.ConnectionClosed as e:
             self.__close(e)
 
     async def connect(self, url: str) -> None:
         """
         Connect to a websocket endpoint.
-        
+
         Parameters
         ----------
         url : str
             The URL/URI to connect to.
-        
+
         Raises
         ------
         ReconnectSignal
             Error occurred and further attempts should be made to connect.
         """
-        
+
         if self._state is not WebsocketState.DISCONNECTED:
             return
-        
+
         self._state = WebsocketState.CONNECTING
 
         try:
             self._websocket = await websockets.connect(url)
         except (
-            asyncio.TimeoutError |
-            OSError |
+            asyncio.TimeoutError,
+            OSError,
             websockets.InvalidHandshake
-        ):
-            raise ReconnectSignal()
-        
+        ) as e:
+            raise ReconnectSignal() from e
+
         self._state = WebsocketState.CONNECTED
 
     @property
@@ -173,7 +173,7 @@ class Websocket:
 
         if self._state in (WebsocketState.DISCONNECTED, WebsocketState.DISCONNECTING):
             return
-        
+
         self._state = WebsocketState.DISCONNECTING
 
         if self._websocket:
@@ -181,7 +181,7 @@ class Websocket:
             self._websocket = None
 
         self._state = WebsocketState.DISCONNECTED
-        
+
     @property
     def disconnected(self) -> bool:
         """If the websocket is currently disconnected."""
@@ -195,12 +195,12 @@ class Websocket:
     async def receive(self) -> WebsocketPacket:
         """
         Block until a payload is received.
-        
+
         Returns
         -------
         WebsocketPacket
             The received payload, either `bytes` or `JSON`.
-        
+
         Raises
         ------
         DisconnectSignal
@@ -212,7 +212,7 @@ class Websocket:
         ResumeSignal
             Error occurred and an attempt to resume the session should be made.
         """
-        
+
         if self._state in (WebsocketState.DISCONNECTED, WebsocketState.DISCONNECTING):
             raise DisconnectSignal()
 
@@ -221,32 +221,32 @@ class Websocket:
 
         try:
             payload: str | bytes = await self._websocket.recv()
-        except OSError:
-            raise ResumeSignal()
+        except OSError as e:
+            raise ResumeSignal() from e
         except websockets.ConnectionClosed as e:
             self.__close(e)
-        
+
         if isinstance(payload, str):
             try:
                 return WebsocketPacketJSON(json.loads(payload))
             except Exception:
                 return WebsocketPacketJSON({})
-        
+
         if isinstance(payload, bytes):
             return WebsocketPacketBytes(payload)
-        
+
         error: str = f"Unexpected websocket payload type: {type(payload)!r}"
         raise RuntimeError(error)
 
     async def send_bytes(self, data: bytes) -> None:
         """
         Send a `bytes` payload through the websocket.
-        
+
         Parameters
         ----------
         data : bytes
             The `bytes` payload to send.
-        
+
         Raises
         ------
         DisconnectSignal
@@ -262,12 +262,12 @@ class Websocket:
     async def send_json(self, data: dict[str, Any]) -> None:
         """
         Send a JSON payload through the websocket.
-        
+
         Parameters
         ----------
         data : dict[str, Any]
             The JSON payload to send.
-        
+
         Raises
         ------
         DisconnectSignal

@@ -30,7 +30,7 @@ class YouTubeThumbnail:
     def __init__(self, data: dict[str, str | int]) -> None:
         """
         Create a new thumbnail container.
-        
+
         Parameters
         ----------
         data : dict[str, str | int]
@@ -48,12 +48,12 @@ class YouTubeThumbnail:
     def height(self) -> int:
         """The height of this thumbnail in pixels."""
         return self._height
-    
+
     @property
     def url(self) -> str:
         """The media URL of this thumbnail."""
         return self._url
-    
+
     @property
     def width(self) -> int:
         """The width of this thumbnail in pixels."""
@@ -79,13 +79,13 @@ class YouTubePartialVideo:
     def __init__(self, data: dict[str, Any]) -> None:
         """
         Create a new partial YouTube video container.
-        
+
         Parameters
         ----------
         data : dict[str, Any]
             The raw video data.
         """
-        
+
         for key, value in data.items():
             if key == "thumbnails":
                 value = [YouTubeThumbnail(thumbnail) for thumbnail in value]
@@ -102,12 +102,12 @@ class YouTubePartialVideo:
     def channel(self) -> str | None:
         """The name of the channel that uploaded the video, if provided."""
         return getattr(self, "_channel", None)
-    
+
     @property
     def channel_id(self) -> str | None:
         """The ID of the channel that uploaded the video, if provided."""
         return getattr(self, "_channel_id", None)
-    
+
     @property
     def description(self) -> str | None:
         """The description of the video, if provided."""
@@ -127,22 +127,22 @@ class YouTubePartialVideo:
     def thumbnail(self) -> str | None:
         """The URL of the primary thumbnail of the video, if provided."""
         return getattr(self, "_thumbnail", self.thumbnails[0].url if self.thumbnails else None)
-    
+
     @property
     def thumbnails(self) -> list[YouTubeThumbnail]:
         """A collection of all video thumbnails, if provided."""
         return getattr(self, "_thumbnails", [])
-    
+
     @property
     def timestamp(self) -> int | None:
         """The time in which this video was uploaded, if provided."""
         return getattr(self, "_timestamp", None)
-    
+
     @property
     def title(self) -> str:
         """The title of the video."""
         return self._title
-    
+
     @property
     def url(self) -> str:
         """The URL of the video page."""
@@ -165,7 +165,7 @@ class YouTubeSearchResult:
     def __init__(self, query: str, data: dict[str, Any]) -> None:
         """
         Create a new YouTube search result.
-        
+
         Parameters
         ----------
         query: str
@@ -196,12 +196,12 @@ class YouTubeSearchResult:
     def query(self) -> str:
         """The search query resulting in this result."""
         return self._query
-    
+
     @property
     def raw(self) -> dict[str, Any]:
         """The raw data from the query request."""
         return self._raw
-    
+
     @property
     def videos(self) -> list[YouTubePartialVideo]:
         """The parsed video data from the query request."""
@@ -213,24 +213,24 @@ class _YouTubeInternal:
         if not isinstance(player, AudioPlayer):
             error: str = "Provided player must be `AudioPlayer`"
             raise TypeError(error)
-        
+
         if not isinstance(url, str):
             error: str = "Provided url must be `str`"
             raise TypeError(error)
-        
+
         if limit is not None:
             if not isinstance(limit, int):
                 error: str = "Provided limit must be `int`"
                 raise TypeError(error)
-        
+
             if limit < 1:
                 error: str = "Provided limit must be at least `1`"
                 raise ValueError(error)
-        
+
         if not isinstance(autoplay, bool):
             error: str = "Provided autoplay must be `bool`"
             raise TypeError(error)
-        
+
         if not isinstance(shuffle, bool):
             error: str = "Provided shuffle must be `bool`"
             raise TypeError(error)
@@ -238,15 +238,15 @@ class _YouTubeInternal:
         if "list=" not in url:
             error: str = "Provided url must be a valid playlist URL"
             raise ValueError(error)
-    
+
         def extract() -> dict[str, Any]:
             with YT({"extract_flat": True, "skip_download": True, "quiet": True,}) as ydl:
                 return ydl.extract_info(url, False)
-        
+
         info: dict[str, Any] = await asyncio.to_thread(extract)
         if not info:
             return []
-        
+
         sources: list[YouTubeAudioSource] = []
         entries: list[dict[str, Any]] = info.get("entries", [])
 
@@ -269,10 +269,10 @@ class _YouTubeInternal:
 
             source: YouTubeAudioSource = YouTubeAudioSource(url)
             sources.append(source)
-        
+
         if shuffle:
             random.shuffle(sources)
-        
+
         await player.add_queue_bulk(sources, autoplay=autoplay)
         return sources
 
@@ -281,15 +281,15 @@ class _YouTubeInternal:
         if not isinstance(query, str):
             error: str = "Provided query must be `str`"
             raise TypeError(error)
-        
+
         if not isinstance(limit, int):
             error: str = "Provided limit must be `int`"
             raise TypeError(error)
-        
+
         if not query:
             error: str = "Provided query length must be at least `1`"
             raise ValueError(error)
-        
+
         if limit < 1:
             error: str = "Provided limit must be at least `1`"
             raise ValueError(error)
@@ -299,7 +299,7 @@ class _YouTubeInternal:
 
         if not info:
             return None
-        
+
         return YouTubeSearchResult(query, info)
 
 class YouTube:
@@ -316,7 +316,7 @@ class YouTube:
     ) -> list[YouTubeAudioSource]:
         """
         Queue audio from a YouTube playlist into an audio player queue.
-        
+
         Parameters
         ----------
         player : AudioPlayer
@@ -325,16 +325,16 @@ class YouTube:
             The YouTube playlist URL to add.
         limit : int
             If provided, the maximum amount of audio to queue.
-        autoplay : bool 
+        autoplay : bool
             If provided, controls if the player should automatically play the first queued audio if the player isn't playing anything.
         shuffle : bool
             If provided, if the queued audio should be shuffled instead of the order of the playlist.
-            
+
         Returns
         -------
         list[YouTubeAudioSource]
             A reference to all audio added to the queue.
-        
+
         Raises
         ------
         TypeError
@@ -354,19 +354,19 @@ class YouTube:
     async def search(query: str, limit: int = 10) -> YouTubeSearchResult | None:
         """
         Asynchronously search YouTube via a query.
-        
+
         Parameters
         ----------
         query : str
             The keywords/query to search YouTube with.
         limit : int
             The maximum amount of results to return.
-        
+
         Returns
         -------
         YouTubeSearchResult
             The resulting search from the query, if successful.
-        
+
         Raises
         ------
         TypeError
@@ -378,24 +378,24 @@ class YouTube:
         """
 
         return await asyncio.to_thread(_YouTubeInternal.search, query, limit)
-    
+
     @staticmethod
     def search_sync(query: str, limit: int = 10) -> YouTubeSearchResult | None:
         """
         Synchronously search YouTube via a query.
-        
+
         Parameters
         ----------
         query : str
             The keywords/query to search YouTube with.
         limit : int
             The maximum amount of results to return.
-        
+
         Returns
         -------
         YouTubeSearchResult
             The resulting search from the query, if successful.
-        
+
         Raises
         ------
         TypeError

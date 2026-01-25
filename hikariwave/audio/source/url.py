@@ -38,7 +38,7 @@ class URLAudioSource(AudioSource):
     ) -> None:
         """
         Create a URL audio source.
-        
+
         Parameters
         ----------
         url : str
@@ -53,7 +53,7 @@ class URLAudioSource(AudioSource):
             If provided, an internal name used for display purposes.
         volume : float | str | None
             If provided, overrides the player's set/default volume. Can be scaled (`0.5`, `1.0`, `2.0`, etc.) or dB-based (`-3dB`, etc.).
-        
+
         Raises
         ------
         TypeError

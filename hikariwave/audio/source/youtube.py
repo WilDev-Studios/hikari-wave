@@ -47,7 +47,7 @@ class YouTubeAudioSource(AudioSource):
     ) -> None:
         """
         Create a YouTube audio source.
-        
+
         Parameters
         ----------
         url : str
@@ -60,7 +60,7 @@ class YouTubeAudioSource(AudioSource):
             If provided, an internal name used for display purposes.
         volume : float | str | None
             If provided, overrides the player's set/default volume. Can be scaled (`0.5`, `1.0`, `2.0`, etc.) or dB-based (`-3dB`, etc.).
-        
+
         Important
         ---------
         This source depends on YouTube's undocumented internal APIs via `yt-dlp`. As a result, it is best-effort and may break without notice if YouTube changes its internal behavior.
@@ -111,7 +111,7 @@ class YouTubeAudioSource(AudioSource):
                 "noplaylist": True,
             }) as ydl:
                 return ydl.extract_info(self._url, False)
-        
+
         info: dict[str, Any] = await asyncio.to_thread(extract)
 
         self._content = info["url"]
@@ -147,7 +147,7 @@ class YouTubeAudioSource(AudioSource):
     async def resolve_media(self, force: bool = False) -> str:
         """
         Resolve the video's media URL and enhanced metadata.
-        
+
         Parameters
         ----------
         force : bool
@@ -161,11 +161,11 @@ class YouTubeAudioSource(AudioSource):
 
         if self._content:
             return self.url_media
-        
+
         if self._media_task:
             await self._media_task
             return self.url_media
-        
+
         loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self._media_task = loop.create_task(self._extract_media())
         await self._media_task
@@ -175,20 +175,20 @@ class YouTubeAudioSource(AudioSource):
     async def resolve_metadata(self) -> dict[str, Any]:
         """
         Resolve the video's basic metadata.
-        
+
         Returns
         -------
         dict[str, Any]
             The metadata of this video, once discovered.
         """
-        
+
         if self._metadata:
             return self.metadata
-        
+
         if self._metadata_task:
             await self._metadata_task
             return self.metadata
-        
+
         loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
         self._metadata_task = loop.create_task(self._extract_metadata())
         await self._metadata_task

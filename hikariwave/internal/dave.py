@@ -46,7 +46,7 @@ class DAVEManager:
     ) -> None:
         """
         Create a `DAVE` protocol manager.
-        
+
         Parameters
         ----------
         gateway : VoiceGateway
@@ -55,27 +55,27 @@ class DAVEManager:
 
         self._gateway: VoiceGateway = gateway
         self._session: davey.DaveSession | None = None
-        
+
         self._pending_transitions: dict[TransitionID, ProtocolVersion] = {}
         self._last_transition_id: int | None = None
         self._protocol_version: int = 0
         self._downgraded: bool = False
-    
+
     @staticmethod
     def parse_frame(frame: bytes) -> tuple[int, Opcode, bytes]:
         """
         Parse a `DAVE` frame into a sequence, opcode, and payload.
-        
+
         Parameters
         ----------
         frame : bytes
             The raw payload from the gateway.
-        
+
         Returns
         -------
         tuple[int, Opcode, bytes]
             The sequence, operation code, and payload from the frame.
-        
+
         Raises
         ------
         GatewayError
@@ -85,7 +85,7 @@ class DAVEManager:
         if len(frame) < 3:
             error: str = "DAVE binary frame too short"
             raise GatewayError(error)
-        
+
         return *struct.unpack_from(">HB", frame, 0), frame[3:]
 
     def __reinit(self) -> None:
@@ -96,12 +96,12 @@ class DAVEManager:
             else:
                 self._session = davey.DaveSession(self._protocol_version, int(self._gateway._bot_id), int(self._gateway._channel_id))
                 logger.debug(f"Session initialized for protocol version {self._protocol_version}")
-            
+
             asyncio.create_task(self.__send_key_package())
         else:
             self._session.reset()
             self._session.set_passthrough_mode(True, 10)
-            
+
             logger.debug("DAVE session reset")
 
     async def __send_commit_welcome(
@@ -118,7 +118,7 @@ class DAVEManager:
             payload += welcome_length + commit_welcome.welcome
         else:
             payload += struct.pack(">H", 0)
-        
+
         await self._gateway._websocket.send_bytes(payload)
 
     async def __send_invalid_commit_welcome(
@@ -126,7 +126,7 @@ class DAVEManager:
     ) -> None:
         if self._session:
             self._session.reset()
-        
+
         await self._gateway._websocket.send_json({
             "op": Opcode.DAVE_MLS_INVALID_COMMIT_WELCOME,
             'd': {},
@@ -138,7 +138,7 @@ class DAVEManager:
         if not self._session:
             logger.warning("Cannot send key package: no DAVE session initialized")
             return
-        
+
         key_package: bytes = self._session.get_serialized_key_package()
         opcode_byte: bytes = bytes([Opcode.DAVE_MLS_KEY_PACKAGE])
 
@@ -162,14 +162,14 @@ class DAVEManager:
     ) -> bytes:
         """
         Decrypt a `DAVE` E2EE encrypted packet.
-        
+
         Parameters
         ----------
         user_id : int
             The ID of the user that sent the packet.
         packet : bytes
             The encrypted audio packet.
-        
+
         Returns
         -------
         bytes
@@ -178,7 +178,7 @@ class DAVEManager:
 
         if not self.ready:
             return packet
-        
+
         try:
             return self._session.decrypt(user_id, davey.MediaType.audio, packet)
         except Exception as e:
@@ -191,12 +191,12 @@ class DAVEManager:
     ) -> bytes:
         """
         Encrypt an Opus audio packet with `DAVE` E2EE.
-        
+
         Parameters
         ----------
         opus : bytes
             The Opus audio to encrypt.
-        
+
         Returns
         -------
         bytes
@@ -205,7 +205,7 @@ class DAVEManager:
 
         if not self.ready:
             return opus
-        
+
         try:
             return self._session.encrypt_opus(opus)
         except Exception as e:
@@ -218,12 +218,12 @@ class DAVEManager:
     ) -> str | None:
         """
         Get the verification code for another user in the group.
-        
+
         Parameters
         ----------
         user_id : int
             The ID of the user to verify.
-        
+
         Returns
         -------
         str | None
@@ -232,7 +232,7 @@ class DAVEManager:
 
         if not self._session or not self.ready:
             return None
-        
+
         try:
             return self._session.get_verification_code(user_id)
         except Exception as e:
@@ -245,7 +245,7 @@ class DAVEManager:
     ) -> None:
         """
         Handle an announced MLS commit.
-        
+
         Parameters
         ----------
         payload : bytes
@@ -255,7 +255,7 @@ class DAVEManager:
         if not self._session:
             logger.warning("Cannot process commit: no DAVE session initialized")
             return
-        
+
         transition_id: int = struct.unpack(">H", payload[:2])[0]
         commit: bytes = payload[2:]
 
@@ -277,7 +277,7 @@ class DAVEManager:
     ) -> None:
         """
         Handle execution of a prepared transition.
-        
+
         Parameters
         ----------
         transition_id : int
@@ -298,9 +298,9 @@ class DAVEManager:
             self._downgraded = False
             if self._session:
                 self._session.set_passthrough_mode(True, 10)
-            
+
             logger.debug("DAVE session upgraded")
-        
+
         self._last_transition_id = transition_id
         self._pending_transitions.pop(transition_id, None)
 
@@ -313,7 +313,7 @@ class DAVEManager:
     ) -> None:
         """
         Handle an epoch transition preparation.
-        
+
         Parameters
         ----------
         transition_id : int
@@ -334,7 +334,7 @@ class DAVEManager:
     ) -> None:
         """
         Handle a downgrade transition preparation.
-        
+
         Parameters
         ----------
         transition_id : int
@@ -350,10 +350,10 @@ class DAVEManager:
         if transition_id == 0:
             await self.handle_execute_transition(transition_id)
             return
-        
+
         if protocol_version == 0 and self._session:
             self._session.set_passthrough_mode(True, 24)
-        
+
         await self.__send_transition_ready(transition_id)
 
     async def handle_proposals(
@@ -363,7 +363,7 @@ class DAVEManager:
     ) -> None:
         """
         Handle MLS proposals from the voice gateway.
-        
+
         Parameters
         ----------
         payload : bytes
@@ -375,7 +375,7 @@ class DAVEManager:
         if not self._session:
             logger.warning("Cannot process proposals: no DAVE session initialized")
             return
-        
+
         optype: int = payload[0]
         proposals: bytes = payload[1:]
 
@@ -397,7 +397,7 @@ class DAVEManager:
     ) -> None:
         """
         Handle an MLS welcome message.
-        
+
         Parameters
         ----------
         payload : bytes
@@ -407,7 +407,7 @@ class DAVEManager:
         if not self._session:
             logger.warning("Cannot process welcome: no DAVE session initialized")
             return
-        
+
         transition_id: int = struct.unpack(">H", payload[:2])[0]
         welcome: bytes = payload[2:]
 
@@ -429,7 +429,7 @@ class DAVEManager:
     ) -> None:
         """
         Initialize a new `DAVE` session.
-        
+
         Parameters
         ----------
         protocol_version : int
@@ -457,7 +457,7 @@ class DAVEManager:
     ) -> None:
         """
         Set the external sender for the MLS group.
-        
+
         Parameters
         ----------
         external_sender_data : bytes
@@ -471,7 +471,7 @@ class DAVEManager:
         self._session.set_external_sender(external_sender_data)
 
         await self.__send_key_package()
-    
+
     @property
     def voice_privacy_code(self) -> str | None:
         """
@@ -480,5 +480,5 @@ class DAVEManager:
 
         if not self._session:
             return None
-        
+
         return self._session.voice_privacy_code

@@ -19,7 +19,7 @@ __all__ = ("FileAudioSource",)
 class FileAudioSource(AudioSource):
     """
     File audio source implementation.
-    
+
     Warning
     -------
     This source is intended primarily for testing, development, and simple use cases.
@@ -48,7 +48,7 @@ class FileAudioSource(AudioSource):
     ) -> None:
         """
         Create a file audio source.
-        
+
         Parameters
         ----------
         filepath : str
@@ -63,7 +63,7 @@ class FileAudioSource(AudioSource):
             If provided, an internal name used for display purposes.
         volume : float | str | None
             If provided, overrides the player's set/default volume. Can be scaled (`0.5`, `1.0`, `2.0`, etc.) or dB-based (`-3dB`, etc.).
-        
+
         Warning
         -------
         This source is intended primarily for testing, development, and simple use cases.
@@ -99,7 +99,7 @@ class FileAudioSource(AudioSource):
         if not os.path.isfile(self._content):
             error: str = f"No file exists at this path: {self._content}"
             raise FileNotFoundError(error)
-    
+
     @property
     def filepath(self) -> str:
         """The filepath to the audio file"""

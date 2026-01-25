@@ -38,7 +38,7 @@ class BufferAudioSource(AudioSource):
     ) -> None:
         """
         Create a buffered audio source.
-        
+
         Parameters
         ----------
         buffer : bytearray | bytes | memoryview
@@ -53,7 +53,7 @@ class BufferAudioSource(AudioSource):
             If provided, an internal name used for display purposes.
         volume : float | str | None
             If provided, overrides the player's set/default volume. Can be scaled (`0.5`, `1.0`, `2.0`, etc.) or dB-based (`-3dB`, etc.).
-        
+
         Raises
         ------
         TypeError
@@ -83,7 +83,7 @@ class BufferAudioSource(AudioSource):
         self._channels: int | None = validate_channels(channels) if channels is not None else None
         self._name: str | None = validate_name(name) if name is not None else None
         self._volume: float | str | None = validate_volume(volume) if volume is not None else None
-    
+
     @property
     def buffer(self) -> bytearray | bytes | memoryview:
         """The audio data as a buffer."""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from enum import IntEnum
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.config import Config
@@ -7,7 +8,7 @@ from hikariwave.internal.constants import Constants, Opcode
 from hikariwave.internal.encrypt import Encrypt
 from hikariwave.networking.gateway import GatewayReadyPayload, GatewaySessionDescriptionPayload, VoiceGateway
 from hikariwave.networking.server import VoiceServer
-from typing import Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import asyncio
 import hikari
@@ -51,7 +52,7 @@ class VoiceConnection:
     ) -> None:
         """
         Create a new voice connection.
-        
+
         Parameters
         ----------
         client : VoiceClient
@@ -67,7 +68,7 @@ class VoiceConnection:
         token : str
             The provided token from Discord's OAuth2 gateway.
         """
-        
+
         self._client: VoiceClient = client
         self._guild_id: hikari.Snowflake = guild_id
         self._channel_id: hikari.Snowflake = channel_id
@@ -101,7 +102,7 @@ class VoiceConnection:
 
     async def __gateway_ready(self, payload: GatewayReadyPayload) -> None:
         self._ssrc = payload.ssrc
-        
+
         chosen_mode: str = None
         for mode in payload.modes:
             if mode not in Encrypt.SUPPORTED:
@@ -133,7 +134,7 @@ class VoiceConnection:
         if not event.endpoint:
             await self._disconnect()
             return
-        
+
         self._endpoint = event.endpoint
         self._gateway = VoiceGateway(
             self,
@@ -148,7 +149,7 @@ class VoiceConnection:
     async def _connect(self) -> None:
         if self._state in (ConnectionStatus.CONNECTED, ConnectionStatus.CONNECTING):
             return
-        
+
         self._state = ConnectionStatus.CONNECTING
         self._ready.clear()
 
@@ -165,15 +166,15 @@ class VoiceConnection:
     async def _disconnect(self) -> None:
         if self._state == ConnectionStatus.DISCONNECTED:
             return
-        
+
         self._state = ConnectionStatus.DISCONNECTED
 
         if self._player:
             await self._player.stop()
-        
+
         if self._server:
             await self._server.disconnect()
-    
+
         if self._gateway:
             await self._gateway.disconnect()
 
@@ -191,10 +192,10 @@ class VoiceConnection:
         """
         Disconnect from the current channel.
         """
-        
+
         self._client._bot.unsubscribe(hikari.VoiceServerUpdateEvent, self.__server_update)
         await self._client.disconnect(self._guild_id)
-    
+
     @property
     def guild_id(self) -> hikari.Snowflake:
         """The ID of the guild this connection is in."""
@@ -203,12 +204,12 @@ class VoiceConnection:
     @property
     def latency(self) -> float | None:
         """Get the heartbeat latency of this connection with Discord's gateway, if connected."""
-        
+
         if not self._gateway._heartbeat_ack:
             return None
-        
+
         return self._gateway._heartbeat_ack - self._gateway._heartbeat_sent
-    
+
     @property
     def player(self) -> AudioPlayer:
         """The audio player associated with this connection."""
@@ -217,12 +218,12 @@ class VoiceConnection:
     def set_config(self, config: Config) -> None:
         """
         Set this specific connection's configuration.
-        
+
         Parameters
         ----------
         config : Config
             This connections configuration.
-        
+
         Raises
         ------
         TypeError
@@ -232,5 +233,5 @@ class VoiceConnection:
         if not isinstance(config, Config):
             error: str = "The provided config must be `Config`"
             raise TypeError(error)
-    
+
         self._config = config

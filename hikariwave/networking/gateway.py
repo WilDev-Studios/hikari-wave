@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from enum import IntEnum
 from hikariwave.event.events.voice import VoiceReconnectEvent
@@ -16,7 +17,7 @@ from hikariwave.internal.signal import (
     ResumeSignal,
 )
 from hikariwave.internal.websocket import Websocket, WebsocketPacket, WebsocketPacketBytes, WebsocketPacketJSON
-from typing import Any, Callable, Coroutine, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import asyncio
 import hikari
@@ -96,7 +97,7 @@ class VoiceGateway:
     ) -> None:
         """
         Create a Discord voice gateway connection manager.
-        
+
         Parameters
         ----------
         connection : VoiceConnection
@@ -112,10 +113,10 @@ class VoiceGateway:
         token : str
             The token provided by Discord's gateway.
         """
-        
+
         self._connection: VoiceConnection = connection
         self._state: GatewayState = GatewayState.DISCONNECTED
-        
+
         self._guild_id: hikari.Snowflake = guild_id
         self._channel_id: hikari.Snowflake = channel_id
         self._bot_id: hikari.Snowflake = bot_id
@@ -128,7 +129,7 @@ class VoiceGateway:
         self._gateway_url: str | None = None
         self._websocket: Websocket = Websocket()
         self._dave: DAVEManager = DAVEManager(self)
-        
+
         self._task_heartbeat: asyncio.Task[None] | None = None
         self._task_listen: asyncio.Task[None] | None = None
         self._callbacks: dict[Opcode, Callable[[GatewayPayload], Coroutine[Any, Any, None]]] = {}
@@ -138,11 +139,11 @@ class VoiceGateway:
 
         self._reconnect_attempts: int = 0
         self._task_reconnect: asyncio.Task[None] | None = None
-    
+
     async def __callback(self, opcode: Opcode, payload: GatewayPayload) -> None:
         if opcode not in self._callbacks:
             return
-        
+
         await self._callbacks[opcode](payload)
 
     async def __loop_heartbeat(self, interval: float) -> None:
@@ -167,7 +168,7 @@ class VoiceGateway:
             except asyncio.CancelledError:
                 return
             except DisconnectSignal:
-                logger.debug(f"Voice gateway signalled to disconnect; disconnecting...")
+                logger.debug("Voice gateway signalled to disconnect; disconnecting...")
                 await self.disconnect()
                 return
             except ReconnectSignal:
@@ -181,7 +182,7 @@ class VoiceGateway:
         try:
             while True:
                 packet: WebsocketPacket = await self._websocket.receive()
-                
+
                 if isinstance(packet, WebsocketPacketJSON):
                     opcode: int = packet.payload.get("op")
                     if opcode is None:
@@ -261,7 +262,7 @@ class VoiceGateway:
         except asyncio.CancelledError:
             return
         except DisconnectSignal:
-            logger.debug(f"Voice gateway signalled to disconnect; disconnecting...")
+            logger.debug("Voice gateway signalled to disconnect; disconnecting...")
             await self.disconnect()
             return
         except ReconnectSignal:
@@ -274,18 +275,18 @@ class VoiceGateway:
     async def __reconnect(self) -> None:
         if self._state is GatewayState.CONNECTING:
             return
-        
+
         if self._task_reconnect and not self._task_reconnect.done():
             return
-        
-        logger.debug(f"Voice gateway signalled to reconnect; reconnecting...")
+
+        logger.debug("Voice gateway signalled to reconnect; reconnecting...")
 
         async def reconnect() -> None:
             self._reconnect_attempts += 1
-            
+
             base: float = 1.0
             cap: float = 60.0
-            
+
             delay: float = min(cap, base * (2 ** self._reconnect_attempts))
             jitter: float = delay * 0.25
             delay += jitter * (2 * random.random() - 1)
@@ -296,13 +297,13 @@ class VoiceGateway:
 
             await self.disconnect()
             await self.connect(self._gateway_url)
-        
+
         self._task_reconnect = asyncio.create_task(reconnect())
 
     async def __resume(self) -> None:
         self._state = GatewayState.RESUMING
 
-        logger.debug(f"Voice gateway signalled to resume; resuming...")
+        logger.debug("Voice gateway signalled to resume; resuming...")
 
         try:
             await self._websocket.send_json({
@@ -315,7 +316,7 @@ class VoiceGateway:
                 }
             })
         except DisconnectSignal:
-            logger.debug(f"Voice gateway signalled to disconnect; disconnecting...")
+            logger.debug("Voice gateway signalled to disconnect; disconnecting...")
             await self.disconnect()
             return
         except ReconnectSignal:
@@ -328,7 +329,7 @@ class VoiceGateway:
     async def connect(self, url: str) -> None:
         """
         Connect to a Discord voice gateway endpoint.
-        
+
         Parameters
         ----------
         url : str
@@ -348,7 +349,7 @@ class VoiceGateway:
         except ReconnectSignal:
             await self.__reconnect()
             return
-        
+
         try:
             packet: WebsocketPacketBytes | WebsocketPacketJSON = await self._websocket.receive()
 
@@ -356,7 +357,7 @@ class VoiceGateway:
                 error: str = "Expecting a JSON-encoded packet, not `bytes`"
                 raise GatewayError(error)
         except DisconnectSignal:
-            logger.debug(f"Voice gateway signalled to disconnect; disconnecting...")
+            logger.debug("Voice gateway signalled to disconnect; disconnecting...")
             await self.disconnect()
             return
         except ReconnectSignal:
@@ -365,13 +366,13 @@ class VoiceGateway:
         except ResumeSignal:
             await self.__resume()
             return
-        
+
         opcode: int = packet.payload.get("op")
-        
+
         if opcode != Opcode.HELLO:
             error: str = f"Expected `HELLO` ({Opcode.HELLO.value}) payload, not `{Opcode(opcode).name}` (`{opcode}`)"
             raise GatewayError(error)
-        
+
         payload: dict[str, Any] = packet.payload.get('d', {})
         heartbeat_interval: float = payload.get("heartbeat_interval", 0.0) / 1000
 
@@ -389,7 +390,7 @@ class VoiceGateway:
                 },
             })
         except DisconnectSignal:
-            logger.debug(f"Voice gateway signalled to disconnect; disconnecting...")
+            logger.debug("Voice gateway signalled to disconnect; disconnecting...")
             await self.disconnect()
             return
         except ReconnectSignal:
@@ -398,12 +399,12 @@ class VoiceGateway:
         except ResumeSignal:
             await self.__resume()
             return
-        
+
         logger.debug(f"Identified with voice gateway: Server={self._guild_id}, Session={self._session_id}, Token={self._token}, DAVE={Constants.DAVE_VERSION}")
 
         self._task_listen = asyncio.create_task(self.__loop_listen())
         self._reconnect_attempts = 0
-    
+
     async def disconnect(self) -> None:
         """
         Disconnect from Discord's voice gateway.
@@ -411,7 +412,7 @@ class VoiceGateway:
 
         if self._state in (GatewayState.DISCONNECTED, GatewayState.DISCONNECTING):
             return
-        
+
         self._state = GatewayState.DISCONNECTING
 
         logger.debug(f"Disconnecting from Discord voice gateway: {self._gateway_url}")
@@ -421,7 +422,7 @@ class VoiceGateway:
 
         if self._task_listen:
             self._task_listen.cancel()
-        
+
         await asyncio.gather(*(task for task in (self._task_heartbeat, self._task_listen) if task), return_exceptions=True)
         await self._websocket.disconnect()
 
@@ -438,7 +439,7 @@ class VoiceGateway:
     async def select_protocol(self, ip: str, port: int, mode: str) -> None:
         """
         Send the `SELECT_PROTOCOL` operation payload to Discord's voice gateway.
-        
+
         Parameters
         ----------
         ip : str
@@ -448,7 +449,7 @@ class VoiceGateway:
         mode : str
             The desired encryption method to use with Discord's voice server.
         """
-        
+
         try:
             await self._websocket.send_json({
                 "op": Opcode.SELECT_PROTOCOL,
@@ -462,7 +463,7 @@ class VoiceGateway:
                 }
             })
         except DisconnectSignal:
-            logger.debug(f"Voice gateway signalled to disconnect; disconnecting...")
+            logger.debug("Voice gateway signalled to disconnect; disconnecting...")
             await self.disconnect()
             return
         except ReconnectSignal:
@@ -471,13 +472,13 @@ class VoiceGateway:
         except ResumeSignal:
             await self.__resume()
             return
-        
+
         logger.debug(f"Voice protocol selected: Address={ip}:{port}, Mode={mode}")
 
     def set_callback(self, opcode: Opcode, callback: Callable[[GatewayPayload], Coroutine[Any, Any, None]]) -> None:
         """
         Set a callback method for the arrival of a specific voice gateway operation code.
-        
+
         Parameters
         ----------
         opcode : Opcode
@@ -485,13 +486,13 @@ class VoiceGateway:
         callback : Callable[[GatewayPayload], Coroutine[Any, Any, None]]
             The asynchronous method to call as the callback with the payload of this operation.
         """
-        
+
         self._callbacks[opcode] = callback
-    
+
     async def set_speaking(self, state: bool, priority: bool = False) -> None:
         """
         Set our `SPEAKING` state.
-        
+
         Parameters
         ----------
         state : bool
@@ -499,15 +500,15 @@ class VoiceGateway:
         priority : bool
             If we should speak with `PRIORITY` status.
         """
-        
+
         flags: int = 0
 
         if state:
             flags |= SpeakingFlag.VOICE
-        
+
         if priority:
             flags |= SpeakingFlag.PRIORITY
-        
+
         try:
             await self._websocket.send_json({
                 "op": Opcode.SPEAKING,
@@ -519,5 +520,5 @@ class VoiceGateway:
             })
         except (DisconnectSignal, ReconnectSignal, ResumeSignal):
             return
-        
+
         logger.debug(f"Set speaking state to {state}")
