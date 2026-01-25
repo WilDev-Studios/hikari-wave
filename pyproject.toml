@@ -89,7 +89,10 @@ indent-style = "tab"
 
 [tool.ruff.lint]
 select = ['F', 'E', 'W', 'B', "UP"]
-ignore = ["E501"]
+ignore = [
+    "E501", # line length
+    "W191", # tab usage
+]
 
 [tool.ruff.lint.per-file-ignores]
 "hikariwave/__init__.py" = ["F401"]
