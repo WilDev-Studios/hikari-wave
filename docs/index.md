@@ -1,17 +1,13 @@
 <p align="center">
-    <img src="https://raw.githubusercontent.com/WilDev-Studios/hikari-wave/main/assets/banner.png" width=670/>
-</p>
-<p align="center">
-    <img src="https://img.shields.io/pypi/pyversions/hikari-wave?style=for-the-badge"/>
-    <img src="https://img.shields.io/pypi/dm/hikari-wave?style=for-the-badge"/>
-    <img src="https://readthedocs.org/projects/hikari-wave/badge/?version=latest&style=for-the-badge"/>
-</p>
-
-<p align="center"><b>A lightweight, native voice implementation for hikari-based Discord bots</b></p>
-<p align="center">
-    <b>Latest:</b> <code>0.6.0a1</code>
-    &nbsp;|&nbsp;
-    <b>Python:</b> <code>3.10+</code>
+    <img src="https://raw.githubusercontent.com/WilDev-Studios/hikari-wave/main/assets/banner.png" width=650/><br/>
+    <b>A lightweight, native voice implementation for hikari-based Discord bots</b><br/><br/>
+    <img src="https://img.shields.io/pypi/pyversions/hikari-wave?style=for-the-badge&color=007EC6"/>
+    <img src="https://img.shields.io/pypi/v/hikari-wave?style=for-the-badge&color=007EC6"/>
+    <img src="https://img.shields.io/pypi/dm/hikari-wave?style=for-the-badge&color=007EC6"/><br/>
+    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json&style=for-the-badge&color=002F4B"/>
+    <img src="https://img.shields.io/readthedocs/hikari-wave?style=for-the-badge&color=002F4B"/>
+    <img src="https://img.shields.io/github/actions/workflow/status/WilDev-Studios/hikari-wave/build.yml?branch=main&style=for-the-badge&label=Build/Tests&color=002F4B">
+    <img src="https://img.shields.io/pypi/status/hikari-wave?style=for-the-badge&color=002F4B"/>
 </p>
 
 ## Overview
@@ -57,16 +53,16 @@ bot.run()
 Connect to voice when a member joins:
 
 ```python
-@bot.listen(hikariwave.MemberJoinEvent)
-async def on_join(event):
+@bot.listen()
+async def on_join(event: hikariwave.MemberJoinEvent):
     await voice.connect(event.guild_id, event.channel_id)
 ```
 
 Play audio:
 
 ```python
-@bot.listen(hikariwave.MemberJoinEvent)
-async def on_join(event):
+@bot.listen()
+async def on_join(event: hikariwave.MemberJoinEvent):
     connection = await voice.connect(event.guild_id, event.channel_id)
     source = FileAudioSource("test.mp3")
 
