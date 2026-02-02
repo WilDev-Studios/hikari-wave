@@ -9,6 +9,10 @@ For full details, click a specific version.
 
 ## 0.6.0 (In Progress)
 
+### 0.6.0a2 (UNRELEASED)
+
+- Uncapped `yt-dlp` dependency version.
+
 ### 0.6.0a1 (January 24th, 2026)
 
 - Support for end-to-end encryption via `DAVE`.
