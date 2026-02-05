@@ -5,7 +5,6 @@ from hikariwave.internal.constants import Opcode
 from hikariwave.internal.error import GatewayError
 from typing import TYPE_CHECKING, TypeAlias
 
-import asyncio
 import davey
 import logging
 import struct
@@ -88,7 +87,7 @@ class DAVEManager:
 
         return *struct.unpack_from(">HB", frame, 0), frame[3:]
 
-    def __reinit(self) -> None:
+    async def __reinit(self) -> None:
         if self._protocol_version > 0:
             if self._session:
                 self._session.reinit(self._protocol_version, int(self._gateway._bot_id), int(self._gateway._channel_id))
@@ -97,7 +96,7 @@ class DAVEManager:
                 self._session = davey.DaveSession(self._protocol_version, int(self._gateway._bot_id), int(self._gateway._channel_id))
                 logger.debug(f"Session initialized for protocol version {self._protocol_version}")
 
-            asyncio.create_task(self.__send_key_package())
+            await self.__send_key_package()
         else:
             self._session.reset()
             self._session.set_passthrough_mode(True, 10)
@@ -325,7 +324,7 @@ class DAVEManager:
         logger.debug(f"Preparing DAVE epoch transition: TransitionID={transition_id}, EpochID={epoch_id}")
 
         if epoch_id == 1:
-            self.__reinit()
+            await self.__reinit()
 
     async def handle_prepare_transition(
         self,
@@ -423,7 +422,7 @@ class DAVEManager:
             logger.error(f"Failed to process welcome {transition_id}: {e}")
             await self.__send_invalid_commit_welcome()
 
-    def initialize_session(
+    async def initialize_session(
         self,
         protocol_version: int,
     ) -> None:
@@ -439,7 +438,7 @@ class DAVEManager:
         self._protocol_version = protocol_version
 
         if protocol_version > 0:
-            self.__reinit()
+            await self.__reinit()
 
     @property
     def ready(self) -> bool:

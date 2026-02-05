@@ -144,9 +144,9 @@ class FFmpegWorker:
             stdin_task: asyncio.Task[None] = None
 
             if pipeable:
-                stdin_task = asyncio.create_task(self._write_stdin(process.stdin, content))
+                stdin_task = connection._client._tasks.create(self._write_stdin(process.stdin, content), name="ffmpeg-stdin")
 
-            stderr_task: asyncio.Task[None] = asyncio.create_task(self._drain_stderr(process.stderr))
+            stderr_task: asyncio.Task[None] = connection._client._tasks.create(self._drain_stderr(process.stderr), name="ffmpeg-stderr")
 
             try:
                 await self._read_frames(process.stdout, connection, generation)
@@ -159,7 +159,6 @@ class FFmpegWorker:
                 with contextlib.suppress(asyncio.CancelledError):
                     await stdin_task
 
-            stderr_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await stderr_task
 
@@ -169,11 +168,6 @@ class FFmpegWorker:
             await self._process.terminate()
         except asyncio.CancelledError:
             logger.debug("FFmpeg encode cancelled; terminating process")
-
-            if stdin_task:
-                stdin_task.cancel()
-
-            stderr_task.cancel()
 
             await self._process.terminate()
             raise
@@ -340,8 +334,10 @@ class FFmpegPool:
         async def _run() -> None:
             try:
                 await worker.encode(source, connection)
+            except asyncio.CancelledError:
+                raise
             except Exception:
-                pass
+                logger.exception("FFmpeg worker crashed")
             finally:
                 self._unavailable.remove(worker)
 
@@ -350,7 +346,7 @@ class FFmpegPool:
                 else:
                     await self._available.put(worker)
 
-        encoder: asyncio.Task[None] = asyncio.create_task(_run())
+        encoder: asyncio.Task[None] = connection._client._tasks.create(_run(), name="ffmpeg-encoder")
         connection._player._encoders.add(encoder)
         encoder.add_done_callback(connection._player._encoders.discard)
 

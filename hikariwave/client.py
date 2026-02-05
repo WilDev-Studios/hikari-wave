@@ -17,6 +17,7 @@ from hikariwave.event.events.member import (
 )
 from hikariwave.event.factory import EventFactory
 from hikariwave.internal.error import GatewayError
+from hikariwave.internal.tasks import TaskManager
 from typing import TypeAlias
 
 import asyncio
@@ -57,7 +58,7 @@ class VoiceClient:
     __slots__ = (
         "_bot", "_config", "_audio_frame_length",
         "_connections", "_connectionsr", "_channels", "_members",
-        "_ssrcs", "_ssrcsr", "_states", "_event_factory", "_ffmpeg",
+        "_ssrcs", "_ssrcsr", "_states", "_event_factory", "_ffmpeg", "_tasks",
     )
 
     def __init__(
@@ -109,6 +110,7 @@ class VoiceClient:
 
         self._event_factory: EventFactory = EventFactory(self._bot)
         self._ffmpeg: FFmpegPool = FFmpegPool(self._config._ffmpeg._max_core, self._config._ffmpeg._max_total)
+        self._tasks: TaskManager = TaskManager()
 
         if os.path.exists("wavecache"):
             shutil.rmtree("wavecache")

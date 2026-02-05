@@ -113,6 +113,15 @@ class AudioPlayer:
         self._resume_event: asyncio.Event = asyncio.Event()
         self._resume_event.set()
 
+    def __ensure_loop(self, autoplay: bool | None = None) -> None:
+        if autoplay is not None and not autoplay:
+            return
+
+        if self._player_task:
+            return
+
+        self._player_task = self._connection._client._tasks.create(self._player_loop(), name="player-loop")
+
     def _add_to_history(self, source: AudioSource) -> None:
         if not source:
             return
@@ -320,9 +329,7 @@ class AudioPlayer:
 
         async with self._lock:
             self._queue.append(QueuedAudio(source, AudioBeginOrigin.QUEUE))
-
-            if autoplay and (not self._player_task or self._player_task.done()):
-                self._player_task = asyncio.create_task(self._player_loop())
+            self.__ensure_loop(autoplay)
 
         return Result.succeeded()
 
@@ -373,9 +380,7 @@ class AudioPlayer:
 
         async with self._lock:
             self._queue.extend(valid_sources)
-
-            if autoplay and (not self._player_task or self._player_task.done()):
-                self._player_task = asyncio.create_task(self._player_loop())
+            self.__ensure_loop(autoplay)
 
         return Result.succeeded()
 
@@ -519,8 +524,7 @@ class AudioPlayer:
             if self._current:
                 self._skip_event.set()
 
-            if not self._player_task or self._player_task.done():
-                self._player_task = asyncio.create_task(self._player_loop())
+            self.__ensure_loop()
 
         return Result.succeeded()
 
@@ -548,8 +552,7 @@ class AudioPlayer:
                 self._skip_event.set()
                 self._resume_event.set()
 
-            if not self._player_task or self._player_task.done():
-                self._player_task = asyncio.create_task(self._player_loop())
+            self.__ensure_loop()
 
         return Result.succeeded()
 
@@ -734,6 +737,9 @@ class AudioPlayer:
 
         for task in list(self._encoders):
             task.cancel()
+
+        if self._player_task:
+            self._player_task.cancel()
 
         await asyncio.gather(*self._encoders, return_exceptions=True)
         self._encoders.clear()

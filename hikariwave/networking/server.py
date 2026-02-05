@@ -350,7 +350,7 @@ class VoiceServer:
         logger.debug(f"Connecting to voice server: IP={ip}, Port={port}, SSRC={ssrc}")
         local_address: tuple[str, int] = await self._discover_ip()
 
-        self._watch_task = asyncio.create_task(self._watch_silence())
+        self._watch_task = self._connection._client._tasks.create(self._watch_silence(), name="server-watcher")
 
         return local_address
 

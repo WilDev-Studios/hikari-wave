@@ -200,7 +200,7 @@ class VoiceGateway:
                         case Opcode.SESSION_DESCRIPTION:
                             dave_version: int = payload_json.get("dave_protocol_version", 0)
                             if dave_version > 0:
-                                self._dave.initialize_session(dave_version)
+                                await self._dave.initialize_session(dave_version)
 
                             await self.__callback(Opcode.SESSION_DESCRIPTION, GatewaySessionDescriptionPayload(
                                 dave_version, payload_json.get("mode"), bytes(payload_json.get("secret_key")),
@@ -298,7 +298,7 @@ class VoiceGateway:
             await self.disconnect()
             await self.connect(self._gateway_url)
 
-        self._task_reconnect = asyncio.create_task(reconnect())
+        self._task_reconnect = self._connection._client._tasks.create(reconnect(), name="gateway-reconnect")
 
     async def __resume(self) -> None:
         self._state = GatewayState.RESUMING
@@ -376,7 +376,7 @@ class VoiceGateway:
         payload: dict[str, Any] = packet.payload.get('d', {})
         heartbeat_interval: float = payload.get("heartbeat_interval", 0.0) / 1000
 
-        self._task_heartbeat = asyncio.create_task(self.__loop_heartbeat(heartbeat_interval))
+        self._task_heartbeat = self._connection._client._tasks.create(self.__loop_heartbeat(heartbeat_interval), name="gateway-heartbeat")
 
         try:
             await self._websocket.send_json({
@@ -402,7 +402,7 @@ class VoiceGateway:
 
         logger.debug(f"Identified with voice gateway: Server={self._guild_id}, Session={self._session_id}, Token={self._token}, DAVE={Constants.DAVE_VERSION}")
 
-        self._task_listen = asyncio.create_task(self.__loop_listen())
+        self._task_listen = self._connection._client._tasks.create(self.__loop_listen(), name="gateway-listener")
         self._reconnect_attempts = 0
 
     async def disconnect(self) -> None:

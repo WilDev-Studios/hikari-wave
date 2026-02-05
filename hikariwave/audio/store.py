@@ -72,7 +72,7 @@ class FrameStore:
 
         if self._connection._config.buffer.mode == BufferMode.DISK:
             os.makedirs(f"wavecache/{self._connection._guild_id}", exist_ok=True)
-            self._write_task = asyncio.create_task(self._disk_writer())
+            self._write_task = connection._client._tasks.create(self._disk_writer(), name="store-writer")
 
     async def _disk_writer(self) -> None:
         try:
@@ -227,7 +227,7 @@ class FrameStore:
         self._shutdown = False
 
         if self._connection._config.buffer.mode == BufferMode.DISK:
-            self._write_task = asyncio.create_task(self._disk_writer())
+            self._write_task = self._connection._client._tasks.create(self._disk_writer(), name="store-writer")
 
     async def fetch_frame(self) -> bytes | None:
         """
@@ -240,7 +240,7 @@ class FrameStore:
 
                 if self._connection._config.buffer.mode == BufferMode.DISK and self._live_buffer.qsize() <= self._low_mark and self._disk_queue:
                     if self._read_task is None or self._read_task.done():
-                        self._read_task = asyncio.create_task(self._read_chunk())
+                        self._read_task = self._connection._client._tasks.create(self._read_chunk(), name="store-reader")
 
                 return frame
 
