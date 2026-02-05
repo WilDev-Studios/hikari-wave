@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.audio.source.youtube import YouTubeAudioSource
+from hikariwave.internal.dev import log_exception
 from typing import TYPE_CHECKING
 from yt_dlp.YoutubeDL import YoutubeDL as YT
 
@@ -92,7 +93,8 @@ class YouTubePartialVideo:
 
             try:
                 setattr(self, f"_{key}", value)
-            except AttributeError:
+            except AttributeError as e:
+                log_exception(e)
                 continue
 
     def __repr__(self) -> str:

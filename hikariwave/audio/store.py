@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from hikariwave.config import BufferMode
 from hikariwave.internal.constants import Audio
+from hikariwave.internal.dev import log_exception
 from typing import TYPE_CHECKING
 
 import aiofiles
@@ -91,11 +92,13 @@ class FrameStore:
 
                     self._disk_queue.append(file_index)
                     self._event.set()
-                except Exception:
+                except Exception as e:
+                    log_exception(e)
                     pass
 
                 del data
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as e:
+            log_exception(e)
             pass
 
     async def _read_chunk(self) -> None:
@@ -115,7 +118,8 @@ class FrameStore:
 
                     try:
                         os.remove(path)
-                    except OSError:
+                    except OSError as e:
+                        log_exception(e)
                         pass
 
                     offset: int = 0
@@ -149,7 +153,8 @@ class FrameStore:
                 finally:
                     self._refilling = False
                     self._event.set()
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as e:
+            log_exception(e)
             return
 
     async def clear(self) -> None:
@@ -165,12 +170,14 @@ class FrameStore:
 
             try:
                 await asyncio.wait_for(self._write_task, 2.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
+            except (asyncio.CancelledError, asyncio.TimeoutError) as e:
+                log_exception(e)
                 self._write_task.cancel()
 
                 try:
                     await self._write_task
-                except asyncio.CancelledError:
+                except asyncio.CancelledError as e:
+                    log_exception(e)
                     pass
 
                 self._write_task = None
@@ -181,7 +188,8 @@ class FrameStore:
 
                 try:
                     await self._read_task
-                except asyncio.CancelledError:
+                except asyncio.CancelledError as e:
+                    log_exception(e)
                     pass
 
                 self._read_task = None
@@ -207,7 +215,8 @@ class FrameStore:
                 try:
                     if os.path.exists(path):
                         os.remove(path)
-                except OSError:
+                except OSError as e:
+                    log_exception(e)
                     pass
 
             try:
@@ -219,9 +228,11 @@ class FrameStore:
 
                         try:
                             os.remove(os.path.join(cache_dir, filename))
-                        except OSError:
+                        except OSError as e:
+                            log_exception(e)
                             pass
-            except OSError:
+            except OSError as e:
+                log_exception(e)
                 pass
 
         self._shutdown = False

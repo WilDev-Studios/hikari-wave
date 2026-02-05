@@ -5,6 +5,7 @@ from enum import (
     IntEnum,
 )
 from hikariwave.internal.constants import CloseCode
+from hikariwave.internal.dev import log_exception
 from hikariwave.internal.signal import (
     DisconnectSignal,
     ReconnectSignal,
@@ -121,8 +122,10 @@ class Websocket:
         try:
             await self._websocket.send(data)
         except OSError as e:
+            log_exception(e)
             raise ResumeSignal() from e
         except websockets.ConnectionClosed as e:
+            log_exception(e)
             self.__close(e)
 
     async def connect(self, url: str) -> None:
@@ -152,6 +155,7 @@ class Websocket:
             OSError,
             websockets.InvalidHandshake
         ) as e:
+            log_exception(e)
             raise ReconnectSignal() from e
 
         self._state = WebsocketState.CONNECTED
@@ -222,14 +226,17 @@ class Websocket:
         try:
             payload: str | bytes = await self._websocket.recv()
         except OSError as e:
+            log_exception(e)
             raise ResumeSignal() from e
         except websockets.ConnectionClosed as e:
+            log_exception(e)
             self.__close(e)
 
         if isinstance(payload, str):
             try:
                 return WebsocketPacketJSON(json.loads(payload))
-            except Exception:
+            except Exception as e:
+                log_exception(e)
                 return WebsocketPacketJSON({})
 
         if isinstance(payload, bytes):

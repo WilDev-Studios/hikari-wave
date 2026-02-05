@@ -10,6 +10,7 @@ from hikariwave.internal.constants import (
     SpeakingFlag,
 )
 from hikariwave.internal.dave import DAVEManager
+from hikariwave.internal.dev import log_exception
 from hikariwave.internal.error import GatewayError
 from hikariwave.internal.signal import (
     DisconnectSignal,
@@ -165,16 +166,23 @@ class VoiceGateway:
                 self._heartbeat_sent = now
 
                 await asyncio.sleep(interval)
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as e:
+                log_exception(e)
                 return
-            except DisconnectSignal:
+            except DisconnectSignal as e:
+                log_exception(e)
                 logger.debug("Voice gateway signalled to disconnect; disconnecting...")
+
                 await self.disconnect()
                 return
-            except ReconnectSignal:
+            except ReconnectSignal as e:
+                log_exception(e)
+
                 await self.__reconnect()
                 return
-            except ResumeSignal:
+            except ResumeSignal as e:
+                log_exception(e)
+
                 await self.__resume()
                 return
 
@@ -259,16 +267,23 @@ class VoiceGateway:
                         case _:
                             logger.debug(f"Received undocumented DAVE voice gateway operation: `{opcode}`")
                             logger.debug(packet.payload)
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as e:
+            log_exception(e)
             return
-        except DisconnectSignal:
+        except DisconnectSignal as e:
+            log_exception(e)
             logger.debug("Voice gateway signalled to disconnect; disconnecting...")
+
             await self.disconnect()
             return
-        except ReconnectSignal:
+        except ReconnectSignal as e:
+            log_exception(e)
+
             await self.__reconnect()
             return
-        except ResumeSignal:
+        except ResumeSignal as e:
+            log_exception(e)
+
             await self.__resume()
             return
 
@@ -315,14 +330,20 @@ class VoiceGateway:
                     "seq_ack": self._sequence,
                 }
             })
-        except DisconnectSignal:
+        except DisconnectSignal as e:
+            log_exception(e)
             logger.debug("Voice gateway signalled to disconnect; disconnecting...")
+
             await self.disconnect()
             return
-        except ReconnectSignal:
+        except ReconnectSignal as e:
+            log_exception(e)
+
             await self.__reconnect()
             return
-        except ResumeSignal:
+        except ResumeSignal as e:
+            log_exception(e)
+
             await self.__resume()
             return
 
@@ -346,7 +367,9 @@ class VoiceGateway:
 
         try:
             await self._websocket.connect(url)
-        except ReconnectSignal:
+        except ReconnectSignal as e:
+            log_exception(e)
+
             await self.__reconnect()
             return
 
@@ -356,14 +379,20 @@ class VoiceGateway:
             if not isinstance(packet, WebsocketPacketJSON):
                 error: str = "Expecting a JSON-encoded packet, not `bytes`"
                 raise GatewayError(error)
-        except DisconnectSignal:
+        except DisconnectSignal as e:
+            log_exception(e)
             logger.debug("Voice gateway signalled to disconnect; disconnecting...")
+
             await self.disconnect()
             return
-        except ReconnectSignal:
+        except ReconnectSignal as e:
+            log_exception(e)
+
             await self.__reconnect()
             return
-        except ResumeSignal:
+        except ResumeSignal as e:
+            log_exception(e)
+
             await self.__resume()
             return
 
@@ -389,14 +418,20 @@ class VoiceGateway:
                     "max_dave_protocol_version": Constants.DAVE_VERSION,
                 },
             })
-        except DisconnectSignal:
+        except DisconnectSignal as e:
+            log_exception(e)
             logger.debug("Voice gateway signalled to disconnect; disconnecting...")
+
             await self.disconnect()
             return
-        except ReconnectSignal:
+        except ReconnectSignal as e:
+            log_exception(e)
+
             await self.__reconnect()
             return
-        except ResumeSignal:
+        except ResumeSignal as e:
+            log_exception(e)
+
             await self.__resume()
             return
 
@@ -462,14 +497,20 @@ class VoiceGateway:
                     }
                 }
             })
-        except DisconnectSignal:
+        except DisconnectSignal as e:
+            log_exception(e)
+
             logger.debug("Voice gateway signalled to disconnect; disconnecting...")
             await self.disconnect()
             return
-        except ReconnectSignal:
+        except ReconnectSignal as e:
+            log_exception(e)
+
             await self.__reconnect()
             return
-        except ResumeSignal:
+        except ResumeSignal as e:
+            log_exception(e)
+
             await self.__resume()
             return
 
@@ -518,7 +559,8 @@ class VoiceGateway:
                     "ssrc": self._ssrc,
                 }
             })
-        except (DisconnectSignal, ReconnectSignal, ResumeSignal):
+        except (DisconnectSignal, ReconnectSignal, ResumeSignal) as e:
+            log_exception(e)
             return
 
         logger.debug(f"Set speaking state to {state}")

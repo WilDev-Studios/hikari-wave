@@ -5,6 +5,7 @@ from enum import IntEnum
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.config import Config
 from hikariwave.internal.constants import Constants, Opcode
+from hikariwave.internal.dev import log_exception
 from hikariwave.internal.encrypt import Encrypt
 from hikariwave.networking.gateway import GatewayReadyPayload, GatewaySessionDescriptionPayload, VoiceGateway
 from hikariwave.networking.server import VoiceServer
@@ -159,7 +160,9 @@ class VoiceConnection:
 
             if self._state == ConnectionStatus.CONNECTING:
                 self._state = ConnectionStatus.CONNECTED
-        except Exception:
+        except Exception as e:
+            log_exception(e)
+
             self._state = ConnectionStatus.NEW
             raise
 

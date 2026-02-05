@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from hikariwave.internal.dev import log_exception
+
 __all__ = ("AudioSource",)
 
 def validate_content(content: object, name: str, expected: tuple[object]) -> type:
@@ -18,7 +20,8 @@ def validate_content(content: object, name: str, expected: tuple[object]) -> typ
         if len(content) == 0:
             error: str = f"Provided {name} can't be empty"
             raise ValueError(error)
-    except TypeError:
+    except TypeError as e:
+        log_exception(e)
         pass
 
     return content

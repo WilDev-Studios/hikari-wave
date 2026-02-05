@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hikariwave.internal.constants import Opcode
+from hikariwave.internal.dev import log_exception
 from hikariwave.internal.error import GatewayError
 from typing import TYPE_CHECKING, TypeAlias
 
@@ -181,6 +182,8 @@ class DAVEManager:
         try:
             return self._session.decrypt(user_id, davey.MediaType.audio, packet)
         except Exception as e:
+            log_exception(e)
+
             logger.error(f"Failed to decrypt packet from user {user_id}: {e}")
             return packet
 
@@ -208,6 +211,8 @@ class DAVEManager:
         try:
             return self._session.encrypt_opus(opus)
         except Exception as e:
+            log_exception(e)
+
             logger.error(f"Failed to encrypt Opus packet: {e}")
             return opus
 
@@ -235,6 +240,8 @@ class DAVEManager:
         try:
             return self._session.get_verification_code(user_id)
         except Exception as e:
+            log_exception(e)
+
             logger.error(f"Failed to get verification code: {e}")
             return None
 
@@ -267,6 +274,8 @@ class DAVEManager:
                 self._pending_transitions[transition_id] = self._protocol_version
                 await self.__send_transition_ready(transition_id)
         except Exception as e:
+            log_exception(e)
+
             logger.error(f"Failed to process commit: {e}")
             await self.__send_invalid_commit_welcome()
 
@@ -388,6 +397,8 @@ class DAVEManager:
             if commit_welcome:
                 await self.__send_commit_welcome(commit_welcome)
         except Exception as e:
+            log_exception(e)
+
             logger.error(f"Exception while processing proposals: {e}", exc_info=True)
 
     async def handle_welcome(
@@ -419,6 +430,8 @@ class DAVEManager:
                 self._pending_transitions[transition_id] = self._protocol_version
                 await self.__send_transition_ready(transition_id)
         except Exception as e:
+            log_exception(e)
+
             logger.error(f"Failed to process welcome {transition_id}: {e}")
             await self.__send_invalid_commit_welcome()
 

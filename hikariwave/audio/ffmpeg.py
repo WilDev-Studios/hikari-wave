@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hikariwave.internal.constants import Audio
+from hikariwave.internal.dev import log_exception
 from hikariwave.audio.source import (
     AudioSource,
     BufferAudioSource,
@@ -79,7 +80,9 @@ class FFmpegProcess:
 
             try:
                 await asyncio.wait_for(self._process.wait(), 1.5)
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as e:
+                log_exception(e)
+
                 self._process.kill()
                 await self._process.wait()
 
@@ -150,7 +153,9 @@ class FFmpegWorker:
 
             try:
                 await self._read_frames(process.stdout, connection, generation)
-            except _StaleEncode:
+            except _StaleEncode as e:
+                log_exception(e)
+
                 logger.debug("FFmpeg encode became stale; terminating process...")
                 await self._process.terminate()
                 return
@@ -166,7 +171,9 @@ class FFmpegWorker:
                 await connection._player._store.store_frame(None, generation)
 
             await self._process.terminate()
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as e:
+            log_exception(e)
+
             logger.debug("FFmpeg encode cancelled; terminating process")
 
             await self._process.terminate()
@@ -216,7 +223,8 @@ class FFmpegWorker:
                         frames.clear()
 
                     packet.clear()
-            except asyncio.IncompleteReadError:
+            except asyncio.IncompleteReadError as e:
+                log_exception(e)
                 break
 
         if frames:
@@ -256,6 +264,7 @@ class FFmpegWorker:
 
                 return await self._encode(source, connection)
             except RuntimeError as e:
+                log_exception(e)
                 last_error = e
 
                 logger.debug(f"FFmpeg encode failed (attempt {attempt} / {MAX_RETRIES}).{' Retrying' if attempt < MAX_RETRIES else ''}")
@@ -334,9 +343,11 @@ class FFmpegPool:
         async def _run() -> None:
             try:
                 await worker.encode(source, connection)
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as e:
+                log_exception(e)
                 raise
-            except Exception:
+            except Exception as e:
+                log_exception(e)
                 logger.exception("FFmpeg worker crashed")
             finally:
                 self._unavailable.remove(worker)

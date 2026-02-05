@@ -13,6 +13,7 @@ from hikariwave.event.events.audio import (
 )
 from hikariwave.event.types import AudioBeginOrigin
 from hikariwave.internal.constants import Audio
+from hikariwave.internal.dev import log_exception
 from hikariwave.internal.result import Result, ResultReason
 from typing import Any, TYPE_CHECKING
 
@@ -281,7 +282,8 @@ class AudioPlayer:
                         channel_id=self._connection._channel_id,
                         guild_id=self._connection._guild_id,
                     )
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as e:
+            log_exception(e)
             pass
 
     async def _send_silence(self) -> None:

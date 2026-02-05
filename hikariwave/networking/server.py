@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from hikariwave.internal.constants import Audio
+from hikariwave.internal.dev import log_exception
 from hikariwave.event.events.member import (
     MemberSpeechEvent,
     MemberStartSpeakingEvent,
@@ -320,7 +321,8 @@ class VoiceServer:
                         )
 
                 await asyncio.sleep(0.05)
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as e:
+            log_exception(e)
             return
 
     async def connect(self, ip: str, port: int, ssrc: int) -> tuple[str, int]:

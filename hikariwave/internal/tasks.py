@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
+from hikariwave.internal.dev import log_exception
 from typing import Any
 
 import asyncio
@@ -21,9 +22,11 @@ class TaskManager:
 
         try:
             task.result()
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as e:
+            log_exception(e)
             pass
-        except Exception:
+        except Exception as e:
+            log_exception(e)
             logger.exception(f"Task {task.get_name()} crashed")
 
     def create(self, coroutine: Callable[[Any], Coroutine[Any, Any, None]], *, name: str | None = None) -> asyncio.Task[None]:

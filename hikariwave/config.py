@@ -1,4 +1,5 @@
 from enum import IntEnum
+from hikariwave.internal.dev import log_exception
 
 __all__ = (
     "BufferConfig",
@@ -43,6 +44,8 @@ def validate_bitrate(bitrate: object) -> str:
     try:
         part: int = int(part)
     except Exception as e:
+        log_exception(e)
+
         error: str = "Provided bitrate must be an integer ending with 'k'"
         raise ValueError(error) from e
 
@@ -133,6 +136,8 @@ def validate_volume(volume: object) -> float | int | str:
         try:
             float(number)
         except Exception as e:
+            log_exception(e)
+
             error: str = "Provided volume must contain a valid number"
             raise ValueError(error) from e
 

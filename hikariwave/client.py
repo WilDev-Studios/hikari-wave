@@ -16,6 +16,7 @@ from hikariwave.event.events.member import (
     MemberMuteEvent,
 )
 from hikariwave.event.factory import EventFactory
+from hikariwave.internal.dev import init_dev, log_exception
 from hikariwave.internal.error import GatewayError
 from hikariwave.internal.tasks import TaskManager
 from typing import TypeAlias
@@ -92,6 +93,8 @@ class VoiceClient:
             error: str = "Provided config must be `Config`"
             raise TypeError(error)
 
+        init_dev()
+
         self._bot: hikari.GatewayBot = bot
         self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._disconnected)
         self._bot.subscribe(hikari.VoiceStateUpdateEvent, self._voice_state_update)
@@ -144,6 +147,8 @@ class VoiceClient:
                     )
                 )
             except asyncio.TimeoutError as e:
+                log_exception(e)
+
                 error: str = "Voice server/state update timed out"
                 raise GatewayError(error) from e
 
@@ -186,7 +191,9 @@ class VoiceClient:
             )
 
             return connection
-        except Exception:
+        except Exception as e:
+            log_exception(e)
+
             await self._disconnect(guild_id)
             raise
 
@@ -540,7 +547,8 @@ class VoiceClient:
 
         try:
             return self._connections[hikari.Snowflake(guild_id)]
-        except KeyError:
+        except KeyError as e:
+            log_exception(e)
             return
 
     async def move(
