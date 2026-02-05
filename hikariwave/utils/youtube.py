@@ -303,7 +303,13 @@ class _YouTubeInternal:
         return YouTubeSearchResult(query, info)
 
 class YouTube:
-    """Utility class containing UX features for `YouTube`."""
+    """
+    Utility class containing UX features for `YouTube`.
+
+    Warning
+    -------
+    This is an `experimental` feature. This may change or be removed with or without notice at any time.
+    """
 
     @staticmethod
     async def queue_from_playlist(
@@ -346,6 +352,10 @@ class YouTube:
         ValueError
             - If `url` is not a valid YouTube playlist URL.
             - If `limit` is provided and is not at least `1`.
+
+        Warning
+        -------
+        This is an `experimental` feature. This may change or be removed with or without notice at any time.
         """
 
         return await _YouTubeInternal.queue_from_playlist(player, url, limit, autoplay, shuffle)
@@ -375,6 +385,10 @@ class YouTube:
         ValueError
             - If `query` length is less than `1`.
             - If `limit` is less than `1`.
+
+        Warning
+        -------
+        This is an `experimental` feature. This may change or be removed with or without notice at any time.
         """
 
         return await asyncio.to_thread(_YouTubeInternal.search, query, limit)
@@ -404,6 +418,10 @@ class YouTube:
         ValueError
             - If `query` length is less than `1`.
             - If `limit` is less than `1`.
+
+        Warning
+        -------
+        This is an `experimental` feature. This may change or be removed with or without notice at any time.
         """
 
         return _YouTubeInternal.search(query, limit)

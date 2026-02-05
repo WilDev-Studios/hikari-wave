@@ -22,12 +22,23 @@ It is designed to be:
 
 No separate software. No complex setup. Just voice.
 
+## Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Documentation](#documentation)
+- [Help/Contact](#help-and-contact)
+- [Versioning/Stability Policy](#versioning--stability-policy)
+
 ## Features
 
 - Native Discord voice gateway implementation
-- Clean, async-first API
-- Strong typing and documentation throughout
+- Async-first, awaitable API
+- Strong typing and documentation throughout (Pylance/MyPy friendly)
 - Supplemental voice events for better control and UX
+- No external services (no Lavalink, no JVM, etc.)
+- Designed specifically for `hikari`'s async model
+- Minimal overhead and predictable behavior
 
 ## Installation
 
@@ -50,15 +61,7 @@ voice = hikariwave.VoiceClient(bot)
 bot.run()
 ```
 
-Connect to voice when a member joins:
-
-```python
-@bot.listen()
-async def on_join(event: hikariwave.MemberJoinEvent):
-    await voice.connect(event.guild_id, event.channel_id)
-```
-
-Play audio:
+Connect to a channel and play audio when you join a channel:
 
 ```python
 @bot.listen()
@@ -71,7 +74,7 @@ async def on_join(event: hikariwave.MemberJoinEvent):
 
 That's it.
 
-## Status
+## Implemented Features
 
 - [X] Voice connect / disconnect
 - [X] Audio playback
@@ -82,7 +85,11 @@ That's it.
     - [X] URLs
     - [X] In-memory buffers
     - [X] YouTube
-- [X] Discord `DAVE`
+- [X] Discord Audio/Video End-to-End Encryption (`DAVE`)
+
+## Library Lifecycle
+
+See [LIFECYCLE.md](LIFECYCLE.md) for the full list of deprecated and experimental features.
 
 ## Help and Contact
 
@@ -112,14 +119,14 @@ Patch releases are safe to upgrade to without code changes.
 - May include **short-lived alpha/beta pre-releases** before stabilization
 
 Example releases flow:
-`0.4.0a1 -> 0.4.0b1 -> 0.4.0 -> 0.4.1`
+`1.0.0a1 -> 1.0.0b1 -> 1.0.0 -> 1.0.1`
 Pre-releases exist to gather feedback and catch issues early. Once stabilized, the same version is released as a stable minor.
 
 ### Pre-Releases (`a`/`b`)
 
-- Used only for **new minor versions**
-- Intended for developers who want early access to new features
-- Not recommended for production unless you are testing upcoming functionality.
+- Used only for **new minor/major versions**
+- Intended for developers who want early access to new features/versions
+- Not recommended for production unless you are testing upcoming functionality
 
 ### Recommendation
 
@@ -142,7 +149,6 @@ A feature may be deprecated if it:
 
 - Has a better or more flexible replacement
 - Causes long-term maintenance or performance issues
-- Was part of an experimental or early design
 - Conflicts with newer architectural changes
 
 ### Deprecation Process
@@ -164,20 +170,10 @@ When a feature is deprecated:
 ### Removal Timeline
 
 - **Pre-`1.0.0`**
-    - Breaking removals may occur in minor releases
+    - Breaking removals may occur at any time
     - Deprecations will still receive advance notice whenever possible
 - **`1.0.0`+**
     - Deprecated features will not be removed until the next **major version**
-    - Patch releases will *never* remove deprecated functionality
-
-### Backward Compatibility Guarantees
-
-- Patch releases (`x.y.z`) will:
-    - Never introduce breaking changes
-    - Never remove deprecated features
-- Minor releases (`x.y.0`) may:
-    - Introduce deprecations
-    - Include pre-releases (`a`/`b`) for feedback before stabilization
 
 ### Experimental Features
 
