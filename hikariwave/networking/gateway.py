@@ -217,8 +217,7 @@ class VoiceGateway:
                             user_id: hikari.Snowflake = hikari.Snowflake(payload_json.get("user_id"))
                             ssrc: int = payload_json.get("ssrc")
 
-                            self._connection._client._ssrcs[user_id] = ssrc
-                            self._connection._client._ssrcsr[ssrc] = user_id
+                            self._connection._client._cache.set_member_ssrc(user_id, ssrc)
                         case Opcode.HEARTBEAT_ACK:
                             self._heartbeat_ack = time.time()
                         case Opcode.RESUMED:
@@ -258,7 +257,7 @@ class VoiceGateway:
                         case Opcode.DAVE_MLS_PROPOSALS:
                             await self._dave.handle_proposals(
                                 payload_bytes,
-                                [int(id) for id in self._connection._client._channels[self._channel_id].members.keys()],
+                                [int(id) for id in self._connection._client._cache.get_channel_member_ids(self._channel_id)],
                             )
                         case Opcode.DAVE_MLS_ANNOUNCE_COMMIT_TRANSITION:
                             await self._dave.handle_commit(payload_bytes)

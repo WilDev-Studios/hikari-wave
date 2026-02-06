@@ -14,7 +14,8 @@ from hikariwave.internal.error import ServerError
 from typing import TypeAlias, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from hikariwave.client import VoiceChannelMeta, VoiceConnection
+    from hikariwave.client import VoiceConnection
+    from hikariwave.impl.cache import VoiceChannelMetadata
 
 import asyncio
 import hikari
@@ -198,14 +199,14 @@ class VoiceServer:
         timestamp: int = struct.unpack_from(">I", data, 4)[0]
         ssrc: int = struct.unpack_from(">I", data, 8)[0]
 
-        if ssrc not in self._connection._client._ssrcsr:
+        if not self._connection._client._cache.check_ssrc_connected(ssrc):
             return
 
         if self._connection._config._record:
             opus: bytes = self._connection._decryption_mode(self._connection._secret, data)
 
             if self._connection._gateway._dave.ready:
-                opus = self._connection._gateway._dave.decrypt(self._connection._client._ssrcsr[ssrc], opus)
+                opus = self._connection._gateway._dave.decrypt(self._connection._client._cache.get_ssrc_member(ssrc), opus)
 
             if ssrc in self._buffers:
                 self._buffers[ssrc].append(opus)
@@ -226,10 +227,10 @@ class VoiceServer:
         if not is_new:
             return
 
-        user_id: hikari.Snowflake = self._connection._client._ssrcsr[ssrc]
-        channel_id: hikari.Snowflake = self._connection._client._members[user_id]
+        user_id: hikari.Snowflake = self._connection._client._cache.get_ssrc_member(ssrc)
+        channel_id: hikari.Snowflake = self._connection._client._cache.get_member_channel(user_id)
 
-        channel: VoiceChannelMeta = self._connection._client._channels[channel_id]
+        channel: VoiceChannelMetadata = self._connection._client._cache.get_channel_metadata(channel_id)
         guild: hikari.Snowflake = channel.guild_id
 
         self._connection._client._event_factory.emit(
@@ -255,10 +256,10 @@ class VoiceServer:
                     del self._last_audio[ssrc]
                     self._stats.pop(ssrc, None)
 
-                    user_id: hikari.Snowflake = self._connection._client._ssrcsr[ssrc]
-                    channel_id: hikari.Snowflake = self._connection._client._members[user_id]
+                    user_id: hikari.Snowflake = self._connection._client._cache.get_ssrc_member(ssrc)
+                    channel_id: hikari.Snowflake = self._connection._client._cache.get_member_channel(user_id)
 
-                    channel: VoiceChannelMeta = self._connection._client._channels[channel_id]
+                    channel: VoiceChannelMetadata = self._connection._client._cache.get_channel_metadata(channel_id)
                     guild: hikari.Snowflake = channel.guild_id
                     member: hikari.Member = channel.members[user_id]
 
@@ -289,13 +290,13 @@ class VoiceServer:
 
                     user_id: hikari.Snowflake = None
                     channel_id: hikari.Snowflake = None
-                    channel: VoiceChannelMeta = None
+                    channel: VoiceChannelMetadata = None
                     guild_id: hikari.Snowflake = None
 
                     if jitter > Audio.MAX_JITTER:
-                        user_id = self._connection._client._ssrcsr[ssrc]
-                        channel_id = self._connection._client._members[user_id]
-                        channel = self._connection._client._channels[channel_id]
+                        user_id = self._connection._client._cache.get_ssrc_member(ssrc)
+                        channel_id = self._connection._client._cache.get_member_channel(user_id)
+                        channel = self._connection._client._cache.get_channel_metadata(channel_id)
                         guild_id = channel.guild_id
 
                         self._connection._client._event_factory.emit(
@@ -307,9 +308,9 @@ class VoiceServer:
                         )
 
                     if loss_rate > Audio.MAX_PACKET_LOSS:
-                        user_id = self._connection._client._ssrcsr[ssrc]
-                        channel_id = self._connection._client._members[user_id]
-                        channel = self._connection._client._channels[channel_id]
+                        user_id = self._connection._client._cache.get_ssrc_member(ssrc)
+                        channel_id = self._connection._client._cache.get_member_channel(user_id)
+                        channel = self._connection._client._cache.get_channel_metadata(channel_id)
                         guild_id = channel.guild_id
 
                         self._connection._client._event_factory.emit(

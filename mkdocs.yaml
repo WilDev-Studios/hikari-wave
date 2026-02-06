@@ -94,11 +94,14 @@ nav:
         - ~.voice: pages/api/event/events/voice.md
       - ~.factory: pages/api/event/factory.md
       - ~.types: pages/api/event/types.md
+    - hikariwave.impl:
+      - ~.cache: pages/api/impl/cache.md
     - hikariwave.internal:
       - ~.constants: pages/api/internal/constants.md
       - ~.dave: pages/api/internal/dave.md
       - ~.encrypt: pages/api/internal/encrypt.md
       - ~.error: pages/api/internal/error.md
+      - ~.helpers: pages/api/internal/helpers.md
       - ~.result: pages/api/internal/result.md
       - ~.signal: pages/api/internal/signal.md
       - ~.websocket: pages/api/internal/websocket.md
