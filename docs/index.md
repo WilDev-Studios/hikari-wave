@@ -26,9 +26,8 @@ No separate software. No complex setup. Just voice.
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Documentation](#documentation)
 - [Help/Contact](#help-and-contact)
-- [Versioning/Stability Policy](#versioning--stability-policy)
+- [Versioning/Stability Policy](#versioning-stability-policy)
 
 ## Features
 
@@ -89,7 +88,7 @@ That's it.
 
 ## Library Lifecycle
 
-See [LIFECYCLE.md](LIFECYCLE.md) for the full list of deprecated and experimental features.
+See https://hikari-wave.wildevstudios.net/en/latest/pages/lifecycle for the full list of deprecated and experimental features.
 
 ## Help and Contact
 
