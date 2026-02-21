@@ -1,12 +1,12 @@
 """
-### hikari-wave: `0.6.0a1`\n
+### hikari-wave: `0.7.0a1`\n
 A lightweight, native voice implementation for `hikari`-based Discord bots.
 
-**Documentation:** https://hikari-wave.wildevstudios.net/en/0.6.0a1\n
+**Documentation:** https://hikari-wave.wildevstudios.net/en/0.7.0a1\n
 **GitHub:** https://github.com/WilDev-Studios/hikari-wave
 """
 
-__version__ = "0.6.0a1"
+__version__ = "0.7.0a1"
 __all__ = (
     "AudioBeginEvent",
     "AudioBeginOrigin",
