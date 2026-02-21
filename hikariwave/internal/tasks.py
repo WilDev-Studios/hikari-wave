@@ -7,12 +7,18 @@ from typing import Any
 import asyncio
 import logging
 
-__all__ = ("TaskManager",)
+__all__ = ()
 
 logger: logging.Logger = logging.getLogger("hikari-wave.tasks")
 
 class TaskManager:
+    __slots__ = ("_tasks",)
+
     def __init__(self) -> None:
+        """
+        Create a new task manager/handler.
+        """
+
         self._tasks: set[asyncio.Task[None]] = set()
 
     def __completed(self, task: asyncio.Task[None]) -> None:
@@ -32,9 +38,25 @@ class TaskManager:
         self.__update()
 
     def __update(self) -> None:
-        logger.debug(f"Itemized view of current tasks: {[task.get_name() for task in self._tasks]}")
+        logger.debug(f"Current tasks: {[task.get_name() for task in self._tasks]}")
 
     def create(self, coroutine: Callable[[Any], Coroutine[Any, Any, None]], *, name: str | None = None) -> asyncio.Task[None]:
+        """
+        Create/spawn a new async task.
+
+        Parameters
+        ----------
+        coroutine : Callable[[Any], Coroutine[Any, Any, None]]
+            The asynchronous method to create as a task.
+        name : str
+            The visible name of this task.
+
+        Returns
+        -------
+        asyncio.Task[None]
+            The created/spawned task.
+        """
+
         task: asyncio.Task[None] = asyncio.create_task(coroutine, name=name)
         self._tasks.add(task)
 

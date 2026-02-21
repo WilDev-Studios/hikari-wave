@@ -19,7 +19,7 @@ For full details, click a specific version.
 - Audio player task now terminates properly.
 - `YouTubeAudioSource` returns cached metadata if available.
 
-### 0.6.0 (January 24th, 2026)
+## 0.6.0 (January 24th, 2026)
 
 - Support for end-to-end encryption via `DAVE`.
 - FFmpeg system now configurable.

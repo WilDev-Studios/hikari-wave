@@ -39,6 +39,13 @@ logger: logging.Logger = logging.getLogger("hikari-wave.client")
 class VoiceClient:
     """Voice system implementation for `hikari`-based gateway applications."""
 
+    __slots__ = (
+        "_bot", "_bot_id",
+        "_accepting", "_config", "_cache",
+        "_connections", "_connectionsr",
+        "_event_factory", "_ffmpeg", "_tasks",
+    )
+
     __instance: ClassVar[VoiceClient | None] = None
 
     def __init__(
@@ -66,7 +73,7 @@ class VoiceClient:
             - If provided, `config` is not `Config`.
         """
 
-        if self.__instance is not None:
+        if VoiceClient.__instance is not None:
             error: str = "Only one voice client can be active per process"
             raise ClientError(error)
 
@@ -75,7 +82,7 @@ class VoiceClient:
         if config is not None:
             verify_type(config, Config, "config")
 
-        self.__instance = self
+        VoiceClient.__instance = self
 
         async def bot_started(_) -> None:
             self._accepting = True

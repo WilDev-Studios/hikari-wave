@@ -254,7 +254,7 @@ class VoiceGateway:
 
         self._state = GatewayState.CONNECTING
 
-        logger.debug(f"Connecting to Discord voice gateway: {url}")
+        logger.debug(f"Connecting to voice gateway: {url}")
 
         try:
             await self._websocket.connect(url)
@@ -318,7 +318,7 @@ class VoiceGateway:
 
         self._state = GatewayState.DISCONNECTING
 
-        logger.debug("Disconnecting from Discord voice gateway")
+        logger.debug("Disconnecting from voice gateway")
 
         tasks: tuple[asyncio.Task[None]] = tuple(task for task in (self._task_heartbeat, self._task_listen) if task and not task.done())
 

@@ -40,6 +40,13 @@ class VoiceChannelMetadata:
 class Cache:
     """Cache management implementation."""
 
+    __slots__ = (
+        "_client",
+        "_states",
+        "_members", "_channels",
+        "_ssrcs", "_ssrcsr",
+    )
+
     def __init__(self, client: VoiceClient) -> None:
         """
         Create a new cache management instance.

@@ -50,6 +50,15 @@ class ConnectionState(IntEnum):
 class VoiceConnection:
     """An active connection to a voice channel."""
 
+    __slots__ = (
+        "_client", "_guild_id", "_channel_id", "_endpoint", "_session_id", "_token", "_config",
+        "_ready", "_server", "_gateway",
+        "_lock", "_state",
+        "_reports", "_report_task",
+        "_ssrc", "_encryption_mode", "_decryption_mode", "_secret",
+        "_player",
+    )
+
     def __init__(
         self,
         client: VoiceClient,
@@ -106,7 +115,7 @@ class VoiceConnection:
         self._player: AudioPlayer = AudioPlayer(self)
 
     async def __gateway_disconnect(self) -> None:
-        logger.warning("Voice gateway requested disconnect")
+        logger.debug("Voice gateway requested disconnect")
 
         async with self._lock:
             if self._state not in (ConnectionState.CONNECTED, ConnectionState.CONNECTING):

@@ -99,11 +99,13 @@ nav:
     - hikariwave.internal:
       - ~.constants: pages/api/internal/constants.md
       - ~.dave: pages/api/internal/dave.md
+      - ~.dev: pages/api/internal/dev.md
       - ~.encrypt: pages/api/internal/encrypt.md
       - ~.error: pages/api/internal/error.md
       - ~.helpers: pages/api/internal/helpers.md
       - ~.result: pages/api/internal/result.md
       - ~.signal: pages/api/internal/signal.md
+      - ~.tasks: pages/api/internal/tasks.md
       - ~.websocket: pages/api/internal/websocket.md
     - hikariwave.networking:
       - ~.gateway: pages/api/networking/gateway.md

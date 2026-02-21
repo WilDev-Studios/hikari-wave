@@ -216,14 +216,21 @@ class BufferConfig:
 class FFmpegConfig:
     """Configure the FFmpeg system."""
 
-    __slots__ = ("_max_core", "_max_total",)
+    __slots__ = ("_max_core", "_max_total", "_path",)
 
-    def __init__(self, max_per_core: int = 1, max_total: int = 8) -> None:
+    def __init__(
+        self,
+        max_per_core: int = 1,
+        max_total: int = 8,
+        path: str = "ffmpeg",
+    ) -> None:
         """
         Create a new `FFmpeg` configuration. This configuration only affects the global state of the voice system, not per-connection.
 
         Parameters
         ----------
+        path : str
+            The system filepath to the `FFmpeg` executable/installation.
         max_per_core : int
             The maximum amount of spawned `FFmpeg` processes per logical CPU/processor core.
         max_total : int
@@ -232,6 +239,7 @@ class FFmpegConfig:
 
         self._max_core: int = max_per_core
         self._max_total: int = max_total
+        self._path: str = path
 
     @property
     def max_per_core(self) -> int:
@@ -242,6 +250,11 @@ class FFmpegConfig:
     def max_total(self) -> int:
         """The maximum amount of spawned `FFmpeg` processes that can exist at any one time."""
         return self._max_total
+
+    @property
+    def ffmpeg(self) -> str:
+        """The system filepath to the `FFmpeg` executable/installation."""
+        return self._path
 
 class Config:
     """Global or per-connection configuration settings."""

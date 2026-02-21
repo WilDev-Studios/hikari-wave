@@ -122,7 +122,7 @@ class FFmpegWorker:
             volume: float | str = source._volume or connection._config.volume
 
             args: list[str] = [
-                "ffmpeg",
+                connection._client._config._ffmpeg._path,
                 "-loglevel", "warning",
             ]
 
