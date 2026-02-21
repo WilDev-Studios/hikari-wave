@@ -50,7 +50,7 @@ dependencies = [
     "hikari>=2.5,<3",
     "PyNaCl>=1.6,<2",
     "websockets>=15.0,<16",
-    "yt-dlp>=2025.12.8",
+    "yt-dlp>=2026.2.4",
 ]
 
 [project.urls]

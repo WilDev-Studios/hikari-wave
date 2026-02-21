@@ -7,13 +7,19 @@ For full details, click a specific version.
     If you ever come across an issue during our `alpha`/`beta` stage, **please** notify us ASAP.
     We want to weed out as much issues as possible before our `1.0.0` release.
 
-## 0.6.0 (In Progress)
+## 0.7.0 (In Progress)
 
-### 0.6.0a2 (UNRELEASED)
+### 0.7.0a1 (February 21st, 2026)
 
-- Uncapped `yt-dlp` dependency version.
+- Additional task manager/handler.
+- Experimentation and deprecation notices in new `DEPRECATION.md`.
+- Connection rewrite for parent/child `VoiceGateway`/`VoiceConnection`.
+- `yt-dlp` updated and uncapped.
+- `YouTubeAudioSource` implements more reliable options for metadata/media resolution.
+- Audio player task now terminates properly.
+- `YouTubeAudioSource` returns cached metadata if available.
 
-### 0.6.0a1 (January 24th, 2026)
+### 0.6.0 (January 24th, 2026)
 
 - Support for end-to-end encryption via `DAVE`.
 - FFmpeg system now configurable.

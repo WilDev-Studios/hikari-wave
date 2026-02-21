@@ -107,8 +107,14 @@ class YouTubeAudioSource(AudioSource):
             with YT({
                 "quiet": True,
                 "no_warnings": True,
-                "format": "bestaudio",
+                "format": "bestaudio/best",
                 "noplaylist": True,
+                "extract_flat": False,
+                "retries": 3,
+                "fragment_retries": 3,
+                "skip_unavailable_fragments": True,
+                "rm_cache_dir": True,
+                "player_js_variant": "main",
             }) as ydl:
                 return ydl.extract_info(self._url, False)
 
@@ -159,11 +165,11 @@ class YouTubeAudioSource(AudioSource):
             The internal video media URL used for playback.
         """
 
-        if self._content:
-            return self.url_media
-
         if self._media_task:
             await self._media_task
+            return self.url_media
+
+        if self._content and not force:
             return self.url_media
 
         loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
@@ -182,11 +188,11 @@ class YouTubeAudioSource(AudioSource):
             The metadata of this video, once discovered.
         """
 
-        if self._metadata:
-            return self.metadata
-
         if self._metadata_task:
             await self._metadata_task
+            return self.metadata
+
+        if self._metadata:
             return self.metadata
 
         loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()

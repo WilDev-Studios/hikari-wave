@@ -23,7 +23,6 @@ from typing import Any, TYPE_CHECKING
 import asyncio
 import hikari
 import logging
-import random
 import time
 
 if TYPE_CHECKING:
@@ -50,6 +49,13 @@ class GatewayReadyPayload(GatewayPayload):
     """The voice SSRC assigned by Discord for voice packets."""
 
 @dataclass(frozen=True, slots=True)
+class GatewayReport:
+    """A connection report from the voice gateway."""
+
+    signal: DisconnectSignal | ReconnectSignal | ResumeSignal
+    """The signal raised by the voice gateway."""
+
+@dataclass(frozen=True, slots=True)
 class GatewaySessionDescriptionPayload(GatewayPayload):
     """Voice gateway `SESSION_DESCRIPTION` payload."""
 
@@ -71,8 +77,6 @@ class GatewayState(IntEnum):
     """Voice gateway is not connected."""
     DISCONNECTING = 3
     """Voice gateway is disconnecting."""
-    RESUMING      = 4
-    """Voice gateway is resuming."""
 
 class VoiceGateway:
     """Discord voice gateway connection manager."""
@@ -81,21 +85,12 @@ class VoiceGateway:
         "_connection", "_state",
         "_guild_id", "_channel_id", "_bot_id",
         "_session_id", "_token", "_sequence", "_ssrc",
-        "_gateway_url", "_websocket", "_dave",
+        "_websocket", "_dave",
         "_task_heartbeat", "_task_listen", "_callbacks",
         "_heartbeat_sent", "_heartbeat_ack",
-        "_reconnect_attempts", "_task_reconnect",
     )
 
-    def __init__(
-        self,
-        connection: VoiceConnection,
-        guild_id: hikari.Snowflake,
-        channel_id: hikari.Snowflake,
-        bot_id: hikari.Snowflake,
-        session_id: str,
-        token: str,
-    ) -> None:
+    def __init__(self, connection: VoiceConnection) -> None:
         """
         Create a Discord voice gateway connection manager.
 
@@ -103,31 +98,14 @@ class VoiceGateway:
         ----------
         connection : VoiceConnection
             The active voice connection.
-        guild_id : hikari.Snowflake
-            The ID of the guild the connection is in.
-        channel_id : hikari.Snowflake
-            The ID of the channel the connection is in.
-        bot_id : hikari.Snowflake
-            The ID of the Discord OAuth2 application controlling the connection.
-        session_id : str
-            The session ID provided by Discord's gateway.
-        token : str
-            The token provided by Discord's gateway.
         """
 
         self._connection: VoiceConnection = connection
         self._state: GatewayState = GatewayState.DISCONNECTED
 
-        self._guild_id: hikari.Snowflake = guild_id
-        self._channel_id: hikari.Snowflake = channel_id
-        self._bot_id: hikari.Snowflake = bot_id
-
-        self._session_id: str = session_id
-        self._token: str = token
         self._sequence: int = -1
         self._ssrc: int | None = None
 
-        self._gateway_url: str | None = None
         self._websocket: Websocket = Websocket()
         self._dave: DAVEManager = DAVEManager(self)
 
@@ -137,9 +115,6 @@ class VoiceGateway:
 
         self._heartbeat_sent: float = 0.0
         self._heartbeat_ack: float = 0.0
-
-        self._reconnect_attempts: int = 0
-        self._task_reconnect: asyncio.Task[None] | None = None
 
     async def __callback(self, opcode: Opcode, payload: GatewayPayload) -> None:
         if opcode not in self._callbacks:
@@ -169,21 +144,9 @@ class VoiceGateway:
             except asyncio.CancelledError as e:
                 log_exception(e)
                 return
-            except DisconnectSignal as e:
+            except (DisconnectSignal, ReconnectSignal, ResumeSignal) as e:
                 log_exception(e)
-                logger.debug("Voice gateway signalled to disconnect; disconnecting...")
-
-                await self.disconnect()
-                return
-            except ReconnectSignal as e:
-                log_exception(e)
-
-                await self.__reconnect()
-                return
-            except ResumeSignal as e:
-                log_exception(e)
-
-                await self.__resume()
+                await self.__signal(e)
                 return
 
     async def __loop_listen(self) -> None:
@@ -222,14 +185,13 @@ class VoiceGateway:
                             self._heartbeat_ack = time.time()
                         case Opcode.RESUMED:
                             self._state = GatewayState.CONNECTED
-                            self._reconnect_attempts = 0
 
-                            logger.debug(f"Voice gateway session resumed: Session={self._session_id}, Token={self._token}")
+                            logger.debug(f"Voice gateway session resumed: Session={self._connection._session_id}, Token={self._connection._token}")
 
                             self._connection._client._event_factory.emit(
                                 VoiceReconnectEvent,
-                                channel_id=self._channel_id,
-                                guild_id=self._guild_id,
+                                channel_id=self._connection._channel_id,
+                                guild_id=self._connection._guild_id,
                             )
                         case Opcode.CLIENTS_CONNECT:...
                         case Opcode.CLIENT_DISCONNECT:...
@@ -257,7 +219,7 @@ class VoiceGateway:
                         case Opcode.DAVE_MLS_PROPOSALS:
                             await self._dave.handle_proposals(
                                 payload_bytes,
-                                [int(id) for id in self._connection._client._cache.get_channel_member_ids(self._channel_id)],
+                                [int(id) for id in self._connection._client._cache.get_channel_member_ids(self._connection._channel_id)],
                             )
                         case Opcode.DAVE_MLS_ANNOUNCE_COMMIT_TRANSITION:
                             await self._dave.handle_commit(payload_bytes)
@@ -269,82 +231,13 @@ class VoiceGateway:
         except asyncio.CancelledError as e:
             log_exception(e)
             return
-        except DisconnectSignal as e:
+        except (DisconnectSignal, ReconnectSignal, ResumeSignal) as e:
             log_exception(e)
-            logger.debug("Voice gateway signalled to disconnect; disconnecting...")
-
-            await self.disconnect()
-            return
-        except ReconnectSignal as e:
-            log_exception(e)
-
-            await self.__reconnect()
-            return
-        except ResumeSignal as e:
-            log_exception(e)
-
-            await self.__resume()
+            await self.__signal(e)
             return
 
-    async def __reconnect(self) -> None:
-        if self._state is GatewayState.CONNECTING:
-            return
-
-        if self._task_reconnect and not self._task_reconnect.done():
-            return
-
-        logger.debug("Voice gateway signalled to reconnect; reconnecting...")
-
-        async def reconnect() -> None:
-            self._reconnect_attempts += 1
-
-            base: float = 1.0
-            cap: float = 60.0
-
-            delay: float = min(cap, base * (2 ** self._reconnect_attempts))
-            jitter: float = delay * 0.25
-            delay += jitter * (2 * random.random() - 1)
-
-            logger.debug(f"Voice gateway reconnect attempt {self._reconnect_attempts} in {delay:.2f}s")
-
-            await asyncio.sleep(delay)
-
-            await self.disconnect()
-            await self.connect(self._gateway_url)
-
-        self._task_reconnect = self._connection._client._tasks.create(reconnect(), name="gateway-reconnect")
-
-    async def __resume(self) -> None:
-        self._state = GatewayState.RESUMING
-
-        logger.debug("Voice gateway signalled to resume; resuming...")
-
-        try:
-            await self._websocket.send_json({
-                "op": Opcode.RESUME,
-                'd': {
-                    "server_id": str(self._guild_id),
-                    "session_id": self._session_id,
-                    "token": self._token,
-                    "seq_ack": self._sequence,
-                }
-            })
-        except DisconnectSignal as e:
-            log_exception(e)
-            logger.debug("Voice gateway signalled to disconnect; disconnecting...")
-
-            await self.disconnect()
-            return
-        except ReconnectSignal as e:
-            log_exception(e)
-
-            await self.__reconnect()
-            return
-        except ResumeSignal as e:
-            log_exception(e)
-
-            await self.__resume()
-            return
+    async def __signal(self, signal: DisconnectSignal | ReconnectSignal | ResumeSignal) -> None:
+        await self._connection._reports.put(GatewayReport(signal))
 
     async def connect(self, url: str) -> None:
         """
@@ -362,37 +255,23 @@ class VoiceGateway:
         self._state = GatewayState.CONNECTING
 
         logger.debug(f"Connecting to Discord voice gateway: {url}")
-        self._gateway_url = url
 
         try:
             await self._websocket.connect(url)
         except ReconnectSignal as e:
             log_exception(e)
-
-            await self.__reconnect()
+            await self.__signal(e)
             return
 
         try:
             packet: WebsocketPacketBytes | WebsocketPacketJSON = await self._websocket.receive()
 
             if not isinstance(packet, WebsocketPacketJSON):
-                error: str = "Expecting a JSON-encoded packet, not `bytes`"
+                error: str = "Expecting a JSON-encoded HELLO packet, not `bytes`"
                 raise GatewayError(error)
-        except DisconnectSignal as e:
+        except (DisconnectSignal, ReconnectSignal, ResumeSignal) as e:
             log_exception(e)
-            logger.debug("Voice gateway signalled to disconnect; disconnecting...")
-
-            await self.disconnect()
-            return
-        except ReconnectSignal as e:
-            log_exception(e)
-
-            await self.__reconnect()
-            return
-        except ResumeSignal as e:
-            log_exception(e)
-
-            await self.__resume()
+            await self.__signal(e)
             return
 
         opcode: int = packet.payload.get("op")
@@ -410,34 +289,24 @@ class VoiceGateway:
             await self._websocket.send_json({
                 "op": Opcode.IDENTIFY,
                 'd': {
-                    "server_id": str(self._guild_id),
-                    "user_id": str(self._bot_id),
-                    "session_id": self._session_id,
-                    "token": self._token,
+                    "server_id": str(self._connection._guild_id),
+                    "user_id": str(self._connection._client._bot_id),
+                    "session_id": self._connection._session_id,
+                    "token": self._connection._token,
                     "max_dave_protocol_version": Constants.DAVE_VERSION,
                 },
             })
-        except DisconnectSignal as e:
+        except (DisconnectSignal, ReconnectSignal, ResumeSignal) as e:
             log_exception(e)
-            logger.debug("Voice gateway signalled to disconnect; disconnecting...")
-
-            await self.disconnect()
-            return
-        except ReconnectSignal as e:
-            log_exception(e)
-
-            await self.__reconnect()
-            return
-        except ResumeSignal as e:
-            log_exception(e)
-
-            await self.__resume()
+            await self.__signal(e)
             return
 
-        logger.debug(f"Identified with voice gateway: Server={self._guild_id}, Session={self._session_id}, Token={self._token}, DAVE={Constants.DAVE_VERSION}")
+        logger.debug(
+            f"Identified with voice gateway: Server={self._connection._guild_id}, Session={self._connection._session_id}, Token={self._connection._token}, DAVE={Constants.DAVE_VERSION}"
+        )
 
         self._task_listen = self._connection._client._tasks.create(self.__loop_listen(), name="gateway-listener")
-        self._reconnect_attempts = 0
+        self._state = GatewayState.CONNECTED
 
     async def disconnect(self) -> None:
         """
@@ -449,15 +318,16 @@ class VoiceGateway:
 
         self._state = GatewayState.DISCONNECTING
 
-        logger.debug(f"Disconnecting from Discord voice gateway: {self._gateway_url}")
+        logger.debug("Disconnecting from Discord voice gateway")
 
-        if self._task_heartbeat:
-            self._task_heartbeat.cancel()
+        tasks: tuple[asyncio.Task[None]] = tuple(task for task in (self._task_heartbeat, self._task_listen) if task and not task.done())
 
-        if self._task_listen:
-            self._task_listen.cancel()
+        for task in tasks:
+            task.cancel()
 
-        await asyncio.gather(*(task for task in (self._task_heartbeat, self._task_listen) if task), return_exceptions=True)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
         await self._websocket.disconnect()
 
         self._sequence = -1
@@ -496,21 +366,9 @@ class VoiceGateway:
                     }
                 }
             })
-        except DisconnectSignal as e:
+        except (DisconnectSignal, ReconnectSignal, ResumeSignal) as e:
             log_exception(e)
-
-            logger.debug("Voice gateway signalled to disconnect; disconnecting...")
-            await self.disconnect()
-            return
-        except ReconnectSignal as e:
-            log_exception(e)
-
-            await self.__reconnect()
-            return
-        except ResumeSignal as e:
-            log_exception(e)
-
-            await self.__resume()
+            await self.__signal(e)
             return
 
         logger.debug(f"Voice protocol selected: Address={ip}:{port}, Mode={mode}")
@@ -560,6 +418,7 @@ class VoiceGateway:
             })
         except (DisconnectSignal, ReconnectSignal, ResumeSignal) as e:
             log_exception(e)
+            await self.__signal(e)
             return
 
         logger.debug(f"Set speaking state to {state}")

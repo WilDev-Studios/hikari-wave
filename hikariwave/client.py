@@ -82,7 +82,7 @@ class VoiceClient:
             self._bot_id = self._bot.get_me().id
             self._bot.unsubscribe(hikari.StartedEvent, bot_started)
 
-        async def force_disconnect(event: hikari.VoiceStateUpdateEvent) -> None:
+        async def state_update(event: hikari.VoiceStateUpdateEvent) -> None:
             if event.state.user_id != self._bot_id:
                 return
 
@@ -96,7 +96,7 @@ class VoiceClient:
 
         self._bot: hikari.GatewayBot = bot
         self._bot.subscribe(hikari.StartedEvent, bot_started)
-        self._bot.subscribe(hikari.VoiceStateUpdateEvent, force_disconnect)
+        self._bot.subscribe(hikari.VoiceStateUpdateEvent, state_update)
         self._bot_id: hikari.Snowflake = None
 
         self._accepting: bool = False

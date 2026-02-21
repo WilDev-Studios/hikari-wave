@@ -91,10 +91,10 @@ class DAVEManager:
     async def __reinit(self) -> None:
         if self._protocol_version > 0:
             if self._session:
-                self._session.reinit(self._protocol_version, int(self._gateway._bot_id), int(self._gateway._channel_id))
+                self._session.reinit(self._protocol_version, int(self._gateway._connection._client._bot_id), int(self._gateway._connection._channel_id))
                 logger.debug(f"Session reinitialized for protocol version {self._protocol_version}")
             else:
-                self._session = davey.DaveSession(self._protocol_version, int(self._gateway._bot_id), int(self._gateway._channel_id))
+                self._session = davey.DaveSession(self._protocol_version, int(self._gateway._connection._client._bot_id), int(self._gateway._connection._channel_id))
                 logger.debug(f"Session initialized for protocol version {self._protocol_version}")
 
             await self.__send_key_package()

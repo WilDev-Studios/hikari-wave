@@ -4,43 +4,51 @@ from collections.abc import Callable
 from enum import IntEnum
 from hikariwave.audio.player import AudioPlayer
 from hikariwave.config import Config
-from hikariwave.internal.constants import Constants, Opcode
-from hikariwave.internal.dev import log_exception
+from hikariwave.internal.constants import (
+    Constants,
+    Opcode,
+)
 from hikariwave.internal.encrypt import Encrypt
-from hikariwave.networking.gateway import GatewayReadyPayload, GatewaySessionDescriptionPayload, VoiceGateway
+from hikariwave.internal.helpers import verify_type
+from hikariwave.internal.signal import (
+    DisconnectSignal,
+    ReconnectSignal,
+    ResumeSignal,
+)
+from hikariwave.networking.gateway import (
+    GatewayReadyPayload,
+    GatewayReport,
+    GatewaySessionDescriptionPayload,
+    VoiceGateway,
+)
 from hikariwave.networking.server import VoiceServer
 from typing import TYPE_CHECKING
 
 import asyncio
 import hikari
+import logging
 
 if TYPE_CHECKING:
     from hikariwave.client import VoiceClient
 
 __all__ = ("VoiceConnection",)
 
-class ConnectionStatus(IntEnum):
-    """Represents the current state of a voice connection."""
+logger: logging.Logger = logging.getLogger("hikari-wave.connection")
 
-    CONNECTED    = 0
-    """Connected to voice gateway and voice server."""
-    CONNECTING   = 1
-    """Connecting to voice gateway and voice server."""
-    DISCONNECTED = 2
-    """Disconnected from voice gateway and voice server."""
-    NEW          = 3
-    """Instantiated and waiting to begin connection."""
-    RECONNECTING = 4
-    """Reconnecting to voice gateway and voice server."""
+class ConnectionState(IntEnum):
+    """The voice connection's state."""
+
+    CONNECTED     = 0
+    """Voice connection has established it's voice gateway and voice server connections."""
+    CONNECTING    = 1
+    """Voice connection is pending connections with the voice gateway and voice server."""
+    DISCONNECTED  = 2
+    """Voice connection is not connected to any voice gateway or voice server."""
+    DISCONNECTING = 3
+    """Voice connection is pending disconnect with the voice gateway and voice server."""
 
 class VoiceConnection:
-    """An active connection to a Discord voice channel."""
-
-    __slots__ = (
-        "_client", "_guild_id", "_channel_id", "_endpoint", "_session_id", "_token", "_config",
-        "_server", "_gateway", "_ready", "_state", "_ssrc", "_encryption_mode", "_decryption_mode",
-        "_secret", "_player",
-    )
+    """An active connection to a voice channel."""
 
     def __init__(
         self,
@@ -57,17 +65,17 @@ class VoiceConnection:
         Parameters
         ----------
         client : VoiceClient
-            The controlling client for all connections and state.
+            The controlling voice system client managing this connection.
         guild_id : hikari.Snowflake
-            The ID of the guild the channel is in.
+            The ID of the guild this connection manages.
         channel_id : hikari.Snowflake
-            The ID of the channel to connect to.
+            The ID of the voice channel this connection manages.
         endpoint : str
-            The URL of Discord's voice gateway.
+            The voice gateway websocket URI.
         session_id : str
-            The provided session ID from Discord's OAuth2 gateway.
+            The voice gateway session ID.
         token : str
-            The provided token from Discord's OAuth2 gateway.
+            The voice gateway token.
         """
 
         self._client: VoiceClient = client
@@ -78,19 +86,17 @@ class VoiceConnection:
         self._token: str = token
         self._config: Config = self._client._config
 
+        self._ready: asyncio.Event = asyncio.Event()
         self._server: VoiceServer = VoiceServer(self)
-        self._gateway: VoiceGateway = VoiceGateway(
-            self,
-            self._guild_id,
-            self._channel_id,
-            self._client.bot.get_me().id,
-            self._session_id,
-            self._token,
-        )
+        self._gateway: VoiceGateway = VoiceGateway(self)
         self._gateway.set_callback(Opcode.READY, self.__gateway_ready)
         self._gateway.set_callback(Opcode.SESSION_DESCRIPTION, self.__gateway_session_description)
-        self._ready: asyncio.Event = asyncio.Event()
-        self._state: ConnectionStatus = ConnectionStatus.NEW
+
+        self._lock: asyncio.Lock = asyncio.Lock()
+        self._state: ConnectionState = ConnectionState.DISCONNECTED
+
+        self._reports: asyncio.Queue[GatewayReport] = asyncio.Queue()
+        self._report_task: asyncio.Task[None] = None
 
         self._ssrc: int = None
         self._encryption_mode: Callable[[bytes, int, bytes, bytes], bytes] = None
@@ -99,7 +105,23 @@ class VoiceConnection:
 
         self._player: AudioPlayer = AudioPlayer(self)
 
-        self._client._bot.subscribe(hikari.VoiceServerUpdateEvent, self.__server_update)
+    async def __gateway_disconnect(self) -> None:
+        logger.warning("Voice gateway requested disconnect")
+
+        async with self._lock:
+            if self._state not in (ConnectionState.CONNECTED, ConnectionState.CONNECTING):
+                return
+
+            self._state = ConnectionState.DISCONNECTING
+
+            try:
+                if self._server:
+                    await self._server.disconnect()
+
+                if self._gateway:
+                    await self._gateway.disconnect()
+            finally:
+                self._state = ConnectionState.DISCONNECTED
 
     async def __gateway_ready(self, payload: GatewayReadyPayload) -> None:
         self._ssrc = payload.ssrc
@@ -120,75 +142,121 @@ class VoiceConnection:
 
         await self._gateway.select_protocol(ip, port, chosen_mode)
 
+    async def __gateway_reconnect(self) -> None:
+        logger.warning("Voice gateway requested reconnect")
+
+        async with self._lock:
+            if self._state != ConnectionState.CONNECTED:
+                return
+
+            self._state = ConnectionState.CONNECTING
+
+            try:
+                await self._gateway.disconnect()
+                await self._gateway.connect(f"{self._endpoint}/v?={Constants.GATEWAY_VERSION}")
+                await self._ready.wait()
+
+                self._state = ConnectionState.CONNECTED
+                logger.info("Voice gateway reconnect successful")
+            except Exception:
+                logger.exception("Voice gateway reconnect failed, tearing down...")
+                await self.__gateway_disconnect()
+
+    async def __gateway_resume(self) -> None:
+        logger.info("Voice gateway requested resume")
+
+        async with self._lock:
+            if self._state != ConnectionState.CONNECTED:
+                return
+
+            self._state = ConnectionState.CONNECTING
+
+            try:
+                await self._gateway._websocket.send_json({
+                    "op": Opcode.RESUME,
+                    'd': {
+                        "server_id": str(self._guild_id),
+                        "session_id": self._session_id,
+                        "token": self._token,
+                        "seq_ack": self._gateway._sequence,
+                    }
+                })
+                await self._ready.wait()
+
+                self._state = ConnectionState.CONNECTED
+                logger.info("Voice gateway resume successful")
+            except Exception:
+                logger.exception("Voice resume failed, attempting reconnect...")
+                await self.__gateway_disconnect()
+
     async def __gateway_session_description(self, payload: GatewaySessionDescriptionPayload) -> None:
         self._encryption_mode = getattr(Encrypt, f"encrypt_{payload.mode}")
         self._decryption_mode = getattr(Encrypt, f"decrypt_{payload.mode}")
         self._secret = payload.secret
-        self._state = ConnectionStatus.CONNECTED
 
         self._ready.set()
 
-        if not self._player._resume_event.is_set() and self._player._current:
-            await self._player.resume()
+    async def __loop_reports(self) -> None:
+        try:
+            while True:
+                report: GatewayReport = await self._reports.get()
 
-    async def __server_update(self, event: hikari.VoiceServerUpdateEvent) -> None:
-        if not event.endpoint:
-            await self._disconnect()
+                if isinstance(report, DisconnectSignal):
+                    await self.__gateway_disconnect()
+                elif isinstance(report, ReconnectSignal):
+                    await self.__gateway_reconnect()
+                elif isinstance(report, ResumeSignal):
+                    await self.__gateway_resume()
+        except asyncio.CancelledError:
             return
-
-        self._endpoint = event.endpoint
-        self._gateway = VoiceGateway(
-            self,
-            self._guild_id,
-            self._channel_id,
-            self._client._bot.get_me().id,
-            self._session_id,
-            event.token,
-        )
-        await self._connect()
 
     async def _connect(self) -> None:
-        if self._state in (ConnectionStatus.CONNECTED, ConnectionStatus.CONNECTING):
-            return
+        async with self._lock:
+            if self._state != ConnectionState.DISCONNECTED:
+                return
 
-        self._state = ConnectionStatus.CONNECTING
-        self._ready.clear()
+            self._ready.clear()
+            self._state = ConnectionState.CONNECTING
 
-        try:
-            await self._gateway.connect(f"{self._endpoint}/?v={Constants.GATEWAY_VERSION}")
-            await self._ready.wait()
+            self._report_task = self._client._tasks.create(self.__loop_reports(), name="connection-reports")
 
-            if self._state == ConnectionStatus.CONNECTING:
-                self._state = ConnectionStatus.CONNECTED
-        except Exception as e:
-            log_exception(e)
+            try:
+                await self._gateway.connect(f"{self._endpoint}/?v={Constants.GATEWAY_VERSION}")
+                await self._ready.wait()
 
-            self._state = ConnectionStatus.NEW
-            raise
+                self._state = ConnectionState.CONNECTED
+            except Exception:
+                self._state = ConnectionState.DISCONNECTED
+                logging.exception("Exception occurred while connecting to gateway")
+                raise
 
     async def _disconnect(self) -> None:
-        if self._state == ConnectionStatus.DISCONNECTED:
-            return
+        async with self._lock:
+            if self._state not in (ConnectionState.CONNECTED, ConnectionState.CONNECTING):
+                return
 
-        self._state = ConnectionStatus.DISCONNECTED
+            self._state = ConnectionState.DISCONNECTING
 
-        if self._player:
-            await self._player.stop()
+            if self._server:
+                await self._server.disconnect()
 
-        if self._server:
-            await self._server.disconnect()
+            if self._gateway:
+                await self._gateway.disconnect()
 
-        if self._gateway:
-            await self._gateway.disconnect()
+            if self._report_task:
+                self._report_task.cancel()
+                await self._report_task
+
+            self._state = ConnectionState.DISCONNECTED
 
     @property
     def channel_id(self) -> hikari.Snowflake:
-        """The ID of the channel this connection is in."""
+        """The ID of the voice channel this connection manages."""
         return self._channel_id
 
     @property
-    def client(self) -> hikari.GatewayBot:
-        """The controlling OAuth2 bot."""
+    def client(self) -> VoiceClient:
+        """The controlling voice system client managing this connection."""
         return self._client
 
     async def disconnect(self) -> None:
@@ -196,17 +264,16 @@ class VoiceConnection:
         Disconnect from the current channel.
         """
 
-        self._client._bot.unsubscribe(hikari.VoiceServerUpdateEvent, self.__server_update)
         await self._client.disconnect(self._guild_id)
 
     @property
     def guild_id(self) -> hikari.Snowflake:
-        """The ID of the guild this connection is in."""
+        """The ID of the guild this connection manages."""
         return self._guild_id
 
     @property
     def latency(self) -> float | None:
-        """Get the heartbeat latency of this connection with Discord's gateway, if connected."""
+        """The heartbeat latency of the voice gateway connection, if connected."""
 
         if not self._gateway._heartbeat_ack:
             return None
@@ -215,7 +282,7 @@ class VoiceConnection:
 
     @property
     def player(self) -> AudioPlayer:
-        """The audio player associated with this connection."""
+        """The audio player responsible for managing all audio playback."""
         return self._player
 
     def set_config(self, config: Config) -> None:
@@ -225,7 +292,7 @@ class VoiceConnection:
         Parameters
         ----------
         config : Config
-            This connections configuration.
+            This connection's configuration.
 
         Raises
         ------
@@ -233,8 +300,5 @@ class VoiceConnection:
             If the provided config isn't `Config`.
         """
 
-        if not isinstance(config, Config):
-            error: str = "The provided config must be `Config`"
-            raise TypeError(error)
-
+        verify_type(config, Config, "config")
         self._config = config

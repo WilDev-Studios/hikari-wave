@@ -18,7 +18,7 @@ class TaskManager:
     def __completed(self, task: asyncio.Task[None]) -> None:
         self._tasks.discard(task)
 
-        logger.debug(f"Task has completed: {task.get_name()}")
+        logger.debug(f"Task completed: {task.get_name()}")
 
         try:
             task.result()
@@ -27,13 +27,19 @@ class TaskManager:
             pass
         except Exception as e:
             log_exception(e)
-            logger.exception(f"Task {task.get_name()} crashed")
+            logger.exception(f"Task crashed: {task.get_name()}")
+
+        self.__update()
+
+    def __update(self) -> None:
+        logger.debug(f"Itemized view of current tasks: {[task.get_name() for task in self._tasks]}")
 
     def create(self, coroutine: Callable[[Any], Coroutine[Any, Any, None]], *, name: str | None = None) -> asyncio.Task[None]:
         task: asyncio.Task[None] = asyncio.create_task(coroutine, name=name)
         self._tasks.add(task)
 
-        logger.debug(f"New task has been created: {task.get_name()}")
+        logger.debug(f"Task created: {task.get_name()}")
+        self.__update()
 
         task.add_done_callback(self.__completed)
         return task

@@ -8,7 +8,7 @@ All deprecations may occur in minor releases and will only be removed in the nex
 
 | Feature | Deprecated | Removal Timeline | Replacement / Notes |
 |---------|------------|------------------|---------------------|
-Nothing is deprecated | --- | --- | --- |
+| Nothing is deprecated | --- | --- | --- |
 
 ## Experiments
 
